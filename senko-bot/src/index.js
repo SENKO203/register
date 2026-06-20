@@ -8,6 +8,8 @@ require('dotenv').config();
 
 const { startBot } = require('./connection');
 const { log, colors, showBanner } = require('./logger');
+const { closeDb } = require('./database');
+const { getErrorStats } = require('./anti-crash');
 
 // ============================================================
 //      Process error handlers
@@ -15,15 +17,27 @@ const { log, colors, showBanner } = require('./logger');
 
 process.on('SIGINT', () => {
     log.warn('⛔ تم إيقاف SENKO BOT.');
+    closeDb();
+    process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+    log.warn('⛔ SIGTERM — إغلاق البوت.');
+    closeDb();
     process.exit(0);
 });
 
 process.on('uncaughtException', (err) => {
-    log.error('❌ خطأ: ' + err.message);
+    log.error('❌ خطأ غير متوقع: ' + err.message);
+    log.error(err.stack?.slice(0, 500) || '');
+    const stats = getErrorStats();
+    if (Object.keys(stats).length > 0) {
+        log.warn('📊 أخطاء متكررة: ' + JSON.stringify(stats));
+    }
 });
 
 process.on('unhandledRejection', (reason) => {
-    log.error('❌ ' + (reason?.message || reason));
+    log.error('❌ Promise مرفوض: ' + (reason?.message || reason));
 });
 
 // ============================================================

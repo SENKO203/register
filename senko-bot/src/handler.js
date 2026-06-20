@@ -31,24 +31,25 @@ const {
 } = require('./helpers');
 
 const { makeSticker, processStickerBatch } = require('./sticker');
+const { safeExecute, wrapHandler, wrapCommandsObj } = require('./anti-crash');
 
 // ============================================================
-//   Command modules
+//   Command modules (wrapped with anti-crash)
 // ============================================================
-const menuCommands = require('./commands/menu');
-const adminCommands = require('./commands/admin');
-const groupCommands = require('./commands/group');
-const eliteCommands = require('./commands/elite');
-const pointsCommands = require('./commands/points');
-const gameCommands = require('./commands/games');
-const raidCommands = require('./commands/raid');
-const mediaCommands = require('./commands/media');
-const cleverCommands = require('./commands/clever');
-const settingsCommands = require('./commands/settings');
-const searchCommands = require('./commands/search');
-const proCommands = require('./commands/pro');
-const funCommands = require('./commands/fun');
-const servicesCommands = require('./commands/services');
+const menuCommands = { handle: wrapHandler(require('./commands/menu').handle, 'menu') };
+const adminCommands = { handle: wrapHandler(require('./commands/admin').handle, 'admin') };
+const groupCommands = { handle: wrapHandler(require('./commands/group').handle, 'group') };
+const eliteCommands = { handle: wrapHandler(require('./commands/elite').handle, 'elite') };
+const pointsCommands = { handle: wrapHandler(require('./commands/points').handle, 'points') };
+const gameCommands = wrapCommandsObj(require('./commands/games').commands, 'games');
+const raidCommands = wrapCommandsObj(require('./commands/raid').commands, 'raid');
+const mediaCommands = wrapCommandsObj(require('./commands/media').commands, 'media');
+const cleverCommands = wrapCommandsObj(require('./commands/clever').commands, 'clever');
+const settingsCommands = wrapCommandsObj(require('./commands/settings').commands, 'settings');
+const searchCommands = wrapCommandsObj(require('./commands/search').commands, 'search');
+const proCommands = wrapCommandsObj(require('./commands/pro').commands, 'pro');
+const funCommands = { handle: wrapHandler(require('./commands/fun').handle, 'fun') };
+const servicesCommands = { handle: wrapHandler(require('./commands/services').handle, 'services') };
 
 // ============================================================
 //   Shared state
@@ -222,8 +223,8 @@ function createHandler(sock, bootTime, isReady) {
 
             // ===== .سينكو raid command =====
             if (command === '.سينكو' && isGroup && isOwner) {
-                if (raidCommands.commands['.سينكو']) {
-                    await raidCommands.commands['.سينكو'](sock, msg, args, ctx);
+                if (raidCommands['.سينكو']) {
+                    await raidCommands['.سينكو'](sock, msg, args, ctx);
                 }
                 return;
             }
@@ -581,8 +582,8 @@ function createHandler(sock, bootTime, isReady) {
 
             // Game commands (writing, counting, dismantling, stop, guess, xo)
             if (['.كتابة', '.تعداد', '.تفكيك', '.توقف', '.تخمين', '.اكس', '.اكس_توقف'].includes(command)) {
-                if (gameCommands.commands[command]) {
-                    await gameCommands.commands[command](sock, msg, args, ctx);
+                if (gameCommands[command]) {
+                    await gameCommands[command](sock, msg, args, ctx);
                 }
                 return;
             }
@@ -724,8 +725,8 @@ function createHandler(sock, bootTime, isReady) {
             }
 
             // Raid commands (commands object pattern)
-            if (raidCommands.commands[command]) {
-                await raidCommands.commands[command](sock, msg, args, ctx);
+            if (raidCommands[command]) {
+                await raidCommands[command](sock, msg, args, ctx);
                 return;
             }
 
@@ -742,37 +743,45 @@ function createHandler(sock, bootTime, isReady) {
             }
 
             // Search commands (commands object pattern)
-            if (searchCommands.commands[command]) {
-                await searchCommands.commands[command](sock, msg, args, ctx);
+            if (searchCommands[command]) {
+                await searchCommands[command](sock, msg, args, ctx);
                 return;
             }
 
             // Pro commands (commands object pattern)
-            if (proCommands.commands[command]) {
-                await proCommands.commands[command](sock, msg, args, ctx);
+            if (proCommands[command]) {
+                await proCommands[command](sock, msg, args, ctx);
                 return;
             }
 
             // Media commands (commands object pattern)
-            if (mediaCommands.commands[command]) {
-                await mediaCommands.commands[command](sock, msg, args, ctx);
+            if (mediaCommands[command]) {
+                await mediaCommands[command](sock, msg, args, ctx);
                 return;
             }
 
             // Clever commands (commands object pattern)
-            if (cleverCommands.commands[command]) {
-                await cleverCommands.commands[command](sock, msg, args, ctx);
+            if (cleverCommands[command]) {
+                await cleverCommands[command](sock, msg, args, ctx);
                 return;
             }
 
             // Settings commands (commands object pattern)
-            if (settingsCommands.commands[command]) {
-                await settingsCommands.commands[command](sock, msg, args, ctx);
+            if (settingsCommands[command]) {
+                await settingsCommands[command](sock, msg, args, ctx);
                 return;
             }
 
         } catch (e) {
-            console.error('Handler error:', e);
+            const { log } = require('./logger');
+            log.error(`[Handler] ${e.message}`);
+            if (msg?.key?.remoteJid && sock) {
+                try {
+                    await sock.sendMessage(msg.key.remoteJid, {
+                        text: `❌ حدث خطأ أثناء تنفيذ الأمر.\n> ${e.message?.slice(0, 100)}`
+                    });
+                } catch {}
+            }
         }
         }
     });

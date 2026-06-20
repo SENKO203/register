@@ -32,6 +32,11 @@ snapshots/
 auth_session/
 auth_info_baileys/
 
+# SQLite database
+*.db
+*.db-wal
+*.db-shm
+
 # Temp files
 *.tmp
 *.log
