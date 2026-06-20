@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Environment variables (contains secrets)
+.env
+
+# Database files
+admins.json
+config.json
+protected_groups.json
+log_group.json
+monitored_groups.json
+muted.json
+warns.json
+banned.json
+emoji_react.json
+points.json
+game_sessions.json
+banned_words.json
+bank_groups.json
+disabled_commands.json
+aliases.json
+link_protect.json
+bad_words_protect.json
+pro_bad_words.json
+pro_warns.json
+
+# Snapshots directory
+snapshots/
+
+# Auth sessions
+auth_session/
+auth_info_baileys/
+
+# Temp files
+*.tmp
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
