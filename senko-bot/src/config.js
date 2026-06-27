@@ -56,6 +56,7 @@ const DEFAULTS = {
         raidName: "",
         weatherKey: process.env.WEATHER_API_KEY || "7d890ad4a7129cd0149b4f3d54052278",
         currencyKey: process.env.CURRENCY_API_KEY || "cf933bf4dca84259ce940635",
+        botDetectKick: true,
     },
     ALIASES: {},
     PROTECT: [],

@@ -124,18 +124,49 @@ commands['.med.twitter'] = async (sock, msg, args, ctx) => {
     } catch (e) { await sock.sendMessage(chatId, { text: `❌ فشل: ${e.message}` }); }
 };
 
-// .med.insta — Instagram
+// .med.insta — Instagram (multiple fallback APIs)
 commands['.med.insta'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
     if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل الرابط: `.med.insta [رابط]`' });
     await sock.sendMessage(chatId, { text: '⏳ جاري التحميل...' });
+    const url = args.trim();
+    let dlUrl = null;
+    let isVid = true;
+
+    // Method 1: saveig API
     try {
-        const dlUrl = await cobaltDl(args.trim());
-        const res = await axios.get(dlUrl, { responseType: 'arraybuffer', timeout: 120000 });
-        const isVid = dlUrl.includes('.mp4') || dlUrl.includes('video');
+        const r = await axios.get(`https://api.saveig.app/api/v1/get-media?url=${encodeURIComponent(url)}`, {
+            timeout: 15000,
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+        if (r.data?.data?.[0]?.url) dlUrl = r.data.data[0].url;
+    } catch {}
+
+    // Method 2: igdownloader
+    if (!dlUrl) {
+        try {
+            const r = await axios.post('https://v3.igdownloader.app/api/ajaxSearch',
+                new URLSearchParams({ recaptchaToken: '', q: url, t: 'media', lang: 'en' }),
+                { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' }, timeout: 15000 });
+            const match = r.data?.data?.match(/href="(https?:\/\/[^"]+)"/);
+            if (match) dlUrl = match[1];
+        } catch {}
+    }
+
+    // Method 3: cobalt (fallback)
+    if (!dlUrl) {
+        try { dlUrl = await cobaltDl(url); } catch {}
+    }
+
+    if (!dlUrl) return sock.sendMessage(chatId, { text: '❌ فشل تحميل الرابط. تأكد أن الرابط صحيح وأن المنشور عام.' });
+
+    try {
+        const res = await axios.get(dlUrl, { responseType: 'arraybuffer', timeout: 120000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const contentType = res.headers['content-type'] || '';
+        isVid = contentType.includes('video') || dlUrl.includes('.mp4') || dlUrl.includes('video');
         if (isVid) await sock.sendMessage(chatId, { video: Buffer.from(res.data), mimetype: 'video/mp4', caption: '📸 Instagram' });
         else await sock.sendMessage(chatId, { image: Buffer.from(res.data), caption: '📸 Instagram' });
-    } catch (e) { await sock.sendMessage(chatId, { text: `❌ فشل: ${e.message}` }); }
+    } catch (e) { await sock.sendMessage(chatId, { text: `❌ فشل التحميل: ${e.message}` }); }
 };
 
 // .med.fb — Facebook

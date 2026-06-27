@@ -4,7 +4,7 @@
 
 const { numOf, resolveId, isUserProtected, isAuth, scanDevices, getMeta, invalidateMeta, sendLog } = require('./helpers');
 const { SUPER_OWNERS } = require('./config');
-const { banDb, protectedGroups, monitoredGroups } = require('./database');
+const { banDb, protectedGroups, monitoredGroups, config } = require('./database');
 const { newMemberWatch } = require('./monitor');
 
 /**
@@ -152,21 +152,33 @@ function registerProtectionHandler(sock, state) {
                     const scan = await scanDevices(sock, p);
                     if (scan && scan.extra >= 1) {
                         try {
-                            // سحب الإشراف (أي جهاز مرتبط)
-                            await sock.groupParticipantsUpdate(id, [p], "demote").catch(() => {});
                             const meta = await getMeta(sock, id);
                             const nowStr = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
-                            sendLog(sock,
-                                `🤖 *سحب إشراف بوت*\n` +
-                                `*━━━━━━━━━━━━━━━━━━*\n` +
-                                `*│🏘️ الجروب:* ${meta.subject}\n` +
-                                `*│👤 المشرف:* @${pNum}\n` +
-                                `*│🔗 أجهزة مرتبطة:* ${scan.extra}\n` +
-                                `*│⚡ الإجراء:* سُحب الإشراف تلقائياً\n` +
-                                `*│⏰ التوقيت:* ${nowStr}\n` +
-                                `*━━━━━━━━━━━━━━━━━━*\n` +
-                                `⚖️ مؤشر احتمالي (قد يكون ويب/لابتوب).`,
-                                [p]);
+                            if (config.botDetectKick !== false) {
+                                await sock.groupParticipantsUpdate(id, [p], "demote").catch(() => {});
+                                sendLog(sock,
+                                    `🤖 *سحب إشراف بوت*\n` +
+                                    `*━━━━━━━━━━━━━━━━━━*\n` +
+                                    `*│🏘️ الجروب:* ${meta.subject}\n` +
+                                    `*│👤 المشرف:* @${pNum}\n` +
+                                    `*│🔗 أجهزة مرتبطة:* ${scan.extra}\n` +
+                                    `*│⚡ الإجراء:* سُحب الإشراف تلقائياً\n` +
+                                    `*│⏰ التوقيت:* ${nowStr}\n` +
+                                    `*━━━━━━━━━━━━━━━━━━*\n` +
+                                    `⚖️ مؤشر احتمالي (قد يكون ويب/لابتوب).`,
+                                    [p]);
+                            } else {
+                                sendLog(sock,
+                                    `🤖 *اشتباه بوت — تحذير فقط*\n` +
+                                    `*━━━━━━━━━━━━━━━━━━*\n` +
+                                    `*│🏘️ الجروب:* ${meta.subject}\n` +
+                                    `*│👤 المشرف:* @${pNum}\n` +
+                                    `*│🔗 أجهزة مرتبطة:* ${scan.extra}\n` +
+                                    `*│⚡ الإجراء:* تحذير فقط (الطرد معطّل)\n` +
+                                    `*│⏰ التوقيت:* ${nowStr}\n` +
+                                    `*━━━━━━━━━━━━━━━━━━*`,
+                                    [p]);
+                            }
                         } catch {}
                     }
                     await new Promise(r => setTimeout(r, 200));

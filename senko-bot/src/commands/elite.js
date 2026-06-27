@@ -117,6 +117,28 @@ async function handle(ctx) {
         return;
     }
 
+    // .تحجير_عرض — عرض الأوامر والفئات المحجورة
+    if (command === ".تحجير_عرض" && isSuperOwner) {
+        const dc = disabledDb.commands || [];
+        const dcat = disabledDb.categories || [];
+        if (!dc.length && !dcat.length) {
+            return sock.sendMessage(chatId, { text: "✅ لا يوجد أوامر أو فئات محجورة حالياً." });
+        }
+        let txt = `🔒 *قائمة المحجورات*\n*━━━━━━━━━━━━━━━━━━*\n`;
+        if (dcat.length) {
+            txt += `*📁 فئات محجورة (${dcat.length}):*\n`;
+            dcat.forEach((c, i) => { txt += `${i + 1}. ${c}\n`; });
+            txt += `\n`;
+        }
+        if (dc.length) {
+            txt += `*⛔ أوامر محجورة (${dc.length}):*\n`;
+            dc.forEach((c, i) => { txt += `${i + 1}. ${c}\n`; });
+        }
+        txt += `*━━━━━━━━━━━━━━━━━━*\nللإحياء: \`.احياء [اسم]\``;
+        await sock.sendMessage(chatId, { text: txt });
+        return;
+    }
+
     // .تحجير — تعطيل أمر/فئة
     if (command === ".تحجير" && isSuperOwner) {
         if (!args) {

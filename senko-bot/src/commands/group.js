@@ -485,6 +485,45 @@ async function handle(ctx) {
     }
 
     // ============================================================
+    //   .محمين — عرض قائمة المحميين
+    // ============================================================
+    if (command === ".محمين" && (isAuth(senderNum) || isSuperOwner)) {
+        const protectedList = Object.entries(adminsDb).filter(([, v]) => v === "محمي");
+        if (!protectedList.length) {
+            return sock.sendMessage(chatId, { text: "✅ لا يوجد أشخاص محميون حالياً." });
+        }
+        let txt = `🛡️ *قائمة المحميين*\n*━━━━━━━━━━━━━━━━━━*\n`;
+        const mentions = [];
+        protectedList.forEach(([num], i) => {
+            txt += `${i + 1}. @${num}\n`;
+            mentions.push(num + '@s.whatsapp.net');
+        });
+        txt += `*━━━━━━━━━━━━━━━━━━*\n*المجموع:* ${protectedList.length} محمي`;
+        await sock.sendMessage(chatId, { text: txt, mentions });
+        return;
+    }
+
+    // ============================================================
+    //   .كاشف — تبديل وضع كشف البوتات (طرد / تحذير فقط)
+    // ============================================================
+    if (command === ".كاشف" && isSuperOwner) {
+        const mode = (args || '').trim().toLowerCase();
+        if (mode === 'of' || mode === 'off') {
+            config.botDetectKick = false;
+            save(FILES.CONFIG, config);
+            await sock.sendMessage(chatId, { text: `🔕 *تم إيقاف طرد البوتات*\n\nالكاشف سيرسل تحذيرات فقط في جروب الأرشيف بدون طرد.\nلإعادة التفعيل: \`.كاشف on\`` });
+        } else if (mode === 'on') {
+            config.botDetectKick = true;
+            save(FILES.CONFIG, config);
+            await sock.sendMessage(chatId, { text: `🔔 *تم تفعيل طرد البوتات*\n\nالكاشف سيطرد البوتات تلقائياً عند اكتشافها.` });
+        } else {
+            const status = config.botDetectKick !== false ? '🟢 مفعّل (يطرد)' : '🔴 معطّل (تحذير فقط)';
+            await sock.sendMessage(chatId, { text: `🤖 *نظام كشف البوتات*\n*━━━━━━━━━━━━━━━━━━*\n*الحالة:* ${status}\n\n*.كاشف on* — تفعيل الطرد\n*.كاشف of* — تحذير فقط\n*━━━━━━━━━━━━━━━━━━*` });
+        }
+        return;
+    }
+
+    // ============================================================
     //   .حماية / .الغاء_حماية / .الغاء — Group protection
     // ============================================================
     if (command === ".حماية" && isSuperOwner && args) {

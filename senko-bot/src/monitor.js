@@ -4,7 +4,7 @@
 
 const { numOf, isUserProtected, scanDevices, getMeta, sendLog, save } = require('./helpers');
 const { FILES, SUPER_OWNERS } = require('./config');
-const { banDb, protectedGroups } = require('./database');
+const { banDb, protectedGroups, config } = require('./database');
 
 // ============================================================
 //   خريطة مراقبة الأعضاء الجدد
@@ -25,25 +25,37 @@ async function checkMemberForBot(sock, memberJid, groupId) {
     if (!scan || scan.extra < 1) return;
 
     try {
-        // أضفه للحظر حتى لا يعود
-        banDb[`${groupId}:${pNum}`] = Date.now();
-        save(FILES.BANNED, banDb);
-        // أزله من قوائم المراقبة حتى لا يُفحص مجدداً
-        newMemberWatch.delete(`${pNum}@${groupId}`);
-        if (watchedMembers.has(groupId)) watchedMembers.get(groupId).delete(memberJid);
-        await sock.groupParticipantsUpdate(groupId, [memberJid], 'remove');
         const meta = await getMeta(sock, groupId);
         const now = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
-        sendLog(sock,
-            `🤖 *كشف بوت — طرد تلقائي*\n` +
-            `*━━━━━━━━━━━━━━━━━━*\n` +
-            `*│🏘️ الجروب:* ${meta.subject}\n` +
-            `*│👤 العضو:* @${pNum}\n` +
-            `*│🔗 أجهزة مرتبطة:* ${scan.extra}\n` +
-            `*│⚡ الإجراء:* تم طرده تلقائياً\n` +
-            `*│⏰ التوقيت:* ${now}\n` +
-            `*━━━━━━━━━━━━━━━━━━*`,
-            [memberJid]);
+
+        if (config.botDetectKick !== false) {
+            banDb[`${groupId}:${pNum}`] = Date.now();
+            save(FILES.BANNED, banDb);
+            newMemberWatch.delete(`${pNum}@${groupId}`);
+            if (watchedMembers.has(groupId)) watchedMembers.get(groupId).delete(memberJid);
+            await sock.groupParticipantsUpdate(groupId, [memberJid], 'remove');
+            sendLog(sock,
+                `🤖 *كشف بوت — طرد تلقائي*\n` +
+                `*━━━━━━━━━━━━━━━━━━*\n` +
+                `*│🏘️ الجروب:* ${meta.subject}\n` +
+                `*│👤 العضو:* @${pNum}\n` +
+                `*│🔗 أجهزة مرتبطة:* ${scan.extra}\n` +
+                `*│⚡ الإجراء:* تم طرده تلقائياً\n` +
+                `*│⏰ التوقيت:* ${now}\n` +
+                `*━━━━━━━━━━━━━━━━━━*`,
+                [memberJid]);
+        } else {
+            sendLog(sock,
+                `🤖 *اشتباه بوت — تحذير فقط*\n` +
+                `*━━━━━━━━━━━━━━━━━━*\n` +
+                `*│🏘️ الجروب:* ${meta.subject}\n` +
+                `*│👤 العضو:* @${pNum}\n` +
+                `*│🔗 أجهزة مرتبطة:* ${scan.extra}\n` +
+                `*│⚡ الإجراء:* تحذير فقط (الطرد معطّل)\n` +
+                `*│⏰ التوقيت:* ${now}\n` +
+                `*━━━━━━━━━━━━━━━━━━*`,
+                [memberJid]);
+        }
     } catch {}
 }
 

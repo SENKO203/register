@@ -123,7 +123,7 @@ function createHandler(sock, bootTime, isReady) {
     sock.ev.on("messages.upsert", async ({ messages }) => {
         for (const msg of messages) {
         try {
-            if (!msg?.message || msg.key.fromMe) continue;
+            if (!msg?.message) continue;
             if (msg.messageTimestamp < bootTime) continue;
             if (!isReady()) continue;
 
@@ -636,6 +636,13 @@ function createHandler(sock, bootTime, isReady) {
             //   Command routing
             // ============================================================
 
+            // Anti-ban: typing simulation before responding
+            try {
+                await sock.presenceSubscribe(chatId);
+                await sock.sendPresenceUpdate('composing', chatId);
+                await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
+            } catch {}
+
             // Points commands
             if (['.نقاطي', '.ترتيب', '.متجر', '.استبدال', '.تحويل'].includes(command)) {
                 await pointsCommands.handle(ctx);
@@ -659,7 +666,7 @@ function createHandler(sock, bootTime, isReady) {
 
             // Elite commands (including .elite menu)
             if (['.elite', '.c²', '.m', '.c', '.تعديل', 'e.', '.e', 'mc².', '.mc²',
-                 '.عرض_نخبة', '.تحجير', '.احياء', '.تنظيف'].includes(command)) {
+                 '.عرض_نخبة', '.تحجير', '.تحجير_عرض', '.احياء', '.تنظيف'].includes(command)) {
                 await eliteCommands.handle(ctx);
                 return;
             }
@@ -793,7 +800,7 @@ function createHandler(sock, bootTime, isReady) {
             // Group commands
             if (['.ملصق', '.حقوق', '.صورة', '.تغير', '.منشن',
                  '.اسم', '.وصف', '.احصاء', '.ارشيف', '.زارشيف',
-                 '.مراقبة', '.ابطال', '.محمي', '.كشف_حماية',
+                 '.مراقبة', '.ابطال', '.محمي', '.محمين', '.كشف_حماية', '.كاشف',
                  '.حماية', '.الغاء_حماية', '.الغاء_مراقبة', '.الغاء',
                  '.ايموج', '.اخرج', '.قبول', '.رفض',
                  '.نسخ', '.نسخ-save', '.نسخ-عرض', '.لصق', '.حذف-نسخة',
