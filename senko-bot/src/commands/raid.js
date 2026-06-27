@@ -21,11 +21,11 @@ const axios = require('axios');
 const { downloadMediaMessage } = require('@itsliaaa/baileys');
 const {
     FILES, OWNERS, SUPER_OWNERS, BOT_LID, BOT_NUM,
-    RAID_MSG, RAID_DESC,
 } = require('../config');
 const {
     save, resolveId, numOf, isBotJid,
     isProtectedParticipant, getMeta, changeGroupPic,
+    RAID_MSG, RAID_DESC,
 } = require('../helpers');
 const { config, adminsDb } = require('../database');
 
@@ -129,7 +129,7 @@ commands['.بحث'] = async (sock, msg, args, ctx) => {
 // .بحث_اسم — search groups by name
 commands['.بحث_اسم'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ اكتب اسم المجموعة: `.بحث_اسم [اسم]`' });
     await sock.sendMessage(chatId, { text: `🔍 جاري البحث عن: *${args}*...` });
     const all = await sock.groupFetchAllParticipating();
     const found = Object.values(all).filter(g => g.subject.toLowerCase().includes(args.toLowerCase()));

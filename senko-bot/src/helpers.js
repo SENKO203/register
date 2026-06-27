@@ -282,15 +282,20 @@ const addPoints = (gid, num, amt) => {
  * Start the daily points reset interval.
  * Resets all users' daily counters at midnight.
  */
+let _lastResetDate = '';
 function startDailyPointsReset() {
     setInterval(() => {
-        const now = new Date();
-        if (now.getHours() === 0 && now.getMinutes() === 0) {
-            const pointsDb = getDb('points');
-            for (const k in pointsDb) pointsDb[k].today = 0;
-            save(FILES.POINTS, pointsDb);
+        const today = new Date().toDateString();
+        if (today !== _lastResetDate) {
+            const now = new Date();
+            if (now.getHours() === 0) {
+                _lastResetDate = today;
+                const pointsDb = getDb('points');
+                for (const k in pointsDb) pointsDb[k].today = 0;
+                save(FILES.POINTS, pointsDb);
+            }
         }
-    }, 60000);
+    }, 30000);
 }
 
 // ============================================================

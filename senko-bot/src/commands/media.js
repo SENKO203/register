@@ -63,7 +63,7 @@ commands['.med'] = async (sock, msg, args, ctx) => {
 // .med.ytv — YouTube video
 commands['.med.ytv'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل الرابط: `.med.ytv [رابط]`' });
     await sock.sendMessage(chatId, { text: '⏳ جاري التحميل...' });
     try {
         const dlUrl = await cobaltDl(args.trim());
@@ -77,7 +77,7 @@ commands['.med.ytv'] = async (sock, msg, args, ctx) => {
 // .med.yta — YouTube audio
 commands['.med.yta'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل الرابط: `.med.yta [رابط]`' });
     await sock.sendMessage(chatId, { text: '⏳ جاري التحميل...' });
     try {
         const dlUrl = await cobaltDl(args.trim(), true);
@@ -89,7 +89,7 @@ commands['.med.yta'] = async (sock, msg, args, ctx) => {
 // .med.tiktok — TikTok
 commands['.med.tiktok'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل الرابط: `.med.tiktok [رابط]`' });
     await sock.sendMessage(chatId, { text: '⏳ جاري التحميل...' });
     try {
         let finalUrl = args.trim();
@@ -115,7 +115,7 @@ commands['.med.tiktok'] = async (sock, msg, args, ctx) => {
 // .med.twitter — Twitter/X
 commands['.med.twitter'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل الرابط: `.med.twitter [رابط]`' });
     await sock.sendMessage(chatId, { text: '⏳ جاري التحميل...' });
     try {
         const dlUrl = await cobaltDl(args.trim());
@@ -127,7 +127,7 @@ commands['.med.twitter'] = async (sock, msg, args, ctx) => {
 // .med.insta — Instagram
 commands['.med.insta'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل الرابط: `.med.insta [رابط]`' });
     await sock.sendMessage(chatId, { text: '⏳ جاري التحميل...' });
     try {
         const dlUrl = await cobaltDl(args.trim());
@@ -141,7 +141,7 @@ commands['.med.insta'] = async (sock, msg, args, ctx) => {
 // .med.fb — Facebook
 commands['.med.fb'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل الرابط: `.med.fb [رابط]`' });
     await sock.sendMessage(chatId, { text: '⏳ جاري التحميل...' });
     try {
         const dlUrl = await cobaltDl(args.trim());
@@ -153,7 +153,7 @@ commands['.med.fb'] = async (sock, msg, args, ctx) => {
 // .med.spotify — Spotify
 commands['.med.spotify'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل رابط Spotify: `.med.spotify [رابط]`' });
     if (!args.includes('spotify.com')) return sock.sendMessage(chatId, { text: '❌ أرسل رابط Spotify' });
     await sock.sendMessage(chatId, { text: '⏳ جاري التحميل...' });
     try {
@@ -167,7 +167,7 @@ commands['.med.spotify'] = async (sock, msg, args, ctx) => {
 // .med.mediafire — MediaFire
 commands['.med.mediafire'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل الرابط: `.med.mediafire [رابط]`' });
     await sock.sendMessage(chatId, { text: '⏳ جاري جلب الرابط...' });
     try {
         const page = await axios.get(args.trim(), { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 15000 });

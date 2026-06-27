@@ -1,7 +1,6 @@
 'use strict';
 
-const fs = require('fs');
-const { FILES, SUPER_OWNER, OWNERS } = require('../config');
+const { FILES, OWNERS } = require('../config');
 const { getDb } = require('../database');
 const {
     save, numOf, resolveId, getPoints, addPoints,

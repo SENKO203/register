@@ -1,6 +1,5 @@
 'use strict';
 
-const fs = require('fs');
 const { FILES, SUPER_OWNERS, OWNERS } = require('../config');
 const {
     save,
@@ -12,12 +11,10 @@ const {
     getMeta, httpsGet
 } = require('../helpers');
 
-const { msgCache } = require('../handler');
-
 async function handle(ctx) {
     const { sock, msg, chatId, isGroup, senderJid, senderNum,
             rawSenderNum, isOwner, isSuperOwner, isNukhba, hasAuth,
-            command, args, target, quoted, msgContent } = ctx;
+            command, args, target, quoted, msgContent, msgCache } = ctx;
 
     // ============================================================
     //   .فتح / .قفل — Open/Close group
@@ -285,102 +282,7 @@ async function handle(ctx) {
         return;
     }
 
-    // ============================================================
-    //   .ممنوع / .فك / .كلمات — Banned words per group
-    // ============================================================
-    if (command === ".ممنوع" && isGroup) {
-        if (!args.trim()) return sock.sendMessage(chatId, { text: "⚠️ اكتب الكلمة: .ممنوع [كلمة]" });
-        if (args.trim().length > 100) return sock.sendMessage(chatId, { text: "❌ الكلمة طويلة جداً (100 حرف كحد أقصى)" });
-        if (!bannedWordsDb[chatId]) bannedWordsDb[chatId] = [];
-        const word = args.trim().toLowerCase();
-        if (bannedWordsDb[chatId].includes(word))
-            return sock.sendMessage(chatId, { text: `⚠️ الكلمة *${word}* محظورة أصلاً.` });
-        bannedWordsDb[chatId].push(word);
-        save(FILES.BANNED_WORDS, bannedWordsDb);
-        await sock.sendMessage(chatId, { text: `✅ تم حظر كلمة: *${word}*\nأي شخص يكتبها سيُطرد تلقائياً.` });
-        return;
-    }
 
-    if (command === ".فك" && isGroup) {
-        if (!args.trim()) return sock.sendMessage(chatId, { text: "⚠️ اكتب الكلمة: .فك [كلمة]" });
-        const word = args.trim().toLowerCase();
-        if (!bannedWordsDb[chatId]?.includes(word))
-            return sock.sendMessage(chatId, { text: `⚠️ الكلمة *${word}* غير موجودة في القائمة.` });
-        bannedWordsDb[chatId] = bannedWordsDb[chatId].filter(w => w !== word);
-        save(FILES.BANNED_WORDS, bannedWordsDb);
-        await sock.sendMessage(chatId, { text: `✅ تم رفع حظر كلمة: *${word}*` });
-        return;
-    }
-
-    if (command === ".كلمات" && isGroup) {
-        const words = bannedWordsDb[chatId] || [];
-        if (!words.length) return sock.sendMessage(chatId, { text: "📋 لا توجد كلمات محظورة في هذه المجموعة." });
-        await sock.sendMessage(chatId, { text: `🚫 *الكلمات المحظورة:*\n*━━━━━━━━━━━━━━━━━━*\n${words.map((w,i) => `${i+1}. ${w}`).join('\n')}\n*━━━━━━━━━━━━━━━━━━*` });
-        return;
-    }
-
-    // ============================================================
-    //   .روابط / .منع / .اضف — Pro protection commands
-    // ============================================================
-    if (command === ".روابط" && isGroup && hasAuth) {
-        const sub = args.trim().toLowerCase();
-        if (sub === "on") {
-            linkProtectDb[chatId] = true;
-            fs.writeFileSync('./link_protect.json', JSON.stringify(linkProtectDb, null, 2));
-            await sock.sendMessage(chatId, { text: "✅ *تم تفعيل حماية الروابط*\nأي شخص يرسل رابطاً سيُحذف ويُعطى تحذيراً (3 = طرد)\nالمعفيون: المطور المطلق والنخبة" });
-        } else if (sub === "of") {
-            delete linkProtectDb[chatId];
-            fs.writeFileSync('./link_protect.json', JSON.stringify(linkProtectDb, null, 2));
-            await sock.sendMessage(chatId, { text: "❌ *تم إيقاف حماية الروابط*" });
-        } else {
-            await sock.sendMessage(chatId, { text: "⚠️ `.روابط on` أو `.روابط of`" });
-        }
-        return;
-    }
-
-    if (command === ".منع" && isGroup && hasAuth) {
-        const sub = args.trim().toLowerCase();
-        if (sub === "on") {
-            badWordsProtectDb[chatId] = true;
-            fs.writeFileSync('./bad_words_protect.json', JSON.stringify(badWordsProtectDb, null, 2));
-            await sock.sendMessage(chatId, { text: "✅ *تم تفعيل فلتر الألفاظ البذيئة*\nالكلمات المحفوظة ستُحذف تلقائياً (3 = طرد)\nالمعفيون: المطور المطلق والنخبة" });
-        } else if (sub === "of") {
-            delete badWordsProtectDb[chatId];
-            fs.writeFileSync('./bad_words_protect.json', JSON.stringify(badWordsProtectDb, null, 2));
-            await sock.sendMessage(chatId, { text: "❌ *تم إيقاف فلتر الألفاظ البذيئة*" });
-        } else {
-            await sock.sendMessage(chatId, { text: "⚠️ `.منع on` أو `.منع of`" });
-        }
-        return;
-    }
-
-    if (command === ".اضف" && hasAuth) {
-        if (!args.trim()) return sock.sendMessage(chatId, { text: "⚠️ `.اضف [كلمة]`" });
-        const newWord = args.trim().toLowerCase();
-        if (proBadWords.includes(newWord))
-            return sock.sendMessage(chatId, { text: `⚠️ الكلمة *${newWord}* موجودة مسبقاً.` });
-        proBadWords.push(newWord);
-        fs.writeFileSync('./pro_bad_words.json', JSON.stringify(proBadWords, null, 2));
-        await sock.sendMessage(chatId, { text: `✅ تمت إضافة *${newWord}* لقائمة الألفاظ.` });
-        return;
-    }
-
-    // ============================================================
-    //   .weatherkey / .currencykey — API keys (super owner only)
-    // ============================================================
-    if (command === ".weatherkey" && isSuperOwner) {
-        config.weatherKey = args.trim();
-        save(FILES.CONFIG, config);
-        await sock.sendMessage(chatId, { text: "✅ تم حفظ مفتاح الطقس." });
-        return;
-    }
-
-    if (command === ".currencykey" && isSuperOwner) {
-        config.currencyKey = args.trim();
-        save(FILES.CONFIG, config);
-        await sock.sendMessage(chatId, { text: "✅ تم حفظ مفتاح العملة." });
-        return;
-    }
 }
 
 module.exports = { handle };

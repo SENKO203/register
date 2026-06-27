@@ -12,10 +12,9 @@
  */
 'use strict';
 
-const fs = require('fs');
 const { FILES } = require('../config');
-const { save } = require('../helpers');
 const {
+    save,
     linkProtectDb, badWordsProtectDb, proBadWords, bannedWordsDb,
 } = require('../database');
 
@@ -50,11 +49,11 @@ commands['.روابط'] = async (sock, msg, args, ctx) => {
     const sub = (args || '').trim().toLowerCase();
     if (sub === 'on') {
         linkProtectDb[chatId] = true;
-        fs.writeFileSync('./link_protect.json', JSON.stringify(linkProtectDb, null, 2));
+        save(FILES.LINK_PROTECT, linkProtectDb);
         await sock.sendMessage(chatId, { text: '✅ *تم تفعيل حماية الروابط*\nأي شخص يرسل رابطاً سيُحذف ويُعطى تحذيراً (3 = طرد)\nالمعفيون: المطور المطلق والنخبة' });
     } else if (sub === 'of') {
         delete linkProtectDb[chatId];
-        fs.writeFileSync('./link_protect.json', JSON.stringify(linkProtectDb, null, 2));
+        save(FILES.LINK_PROTECT, linkProtectDb);
         await sock.sendMessage(chatId, { text: '❌ *تم إيقاف حماية الروابط*' });
     } else {
         await sock.sendMessage(chatId, { text: '⚠️ `.روابط on` أو `.روابط of`' });
@@ -68,11 +67,11 @@ commands['.منع'] = async (sock, msg, args, ctx) => {
     const sub = (args || '').trim().toLowerCase();
     if (sub === 'on') {
         badWordsProtectDb[chatId] = true;
-        fs.writeFileSync('./bad_words_protect.json', JSON.stringify(badWordsProtectDb, null, 2));
+        save(FILES.BAD_WORDS_PROTECT, badWordsProtectDb);
         await sock.sendMessage(chatId, { text: '✅ *تم تفعيل فلتر الألفاظ البذيئة*\nالكلمات المحفوظة ستُحذف تلقائياً (3 = طرد)\nالمعفيون: المطور المطلق والنخبة' });
     } else if (sub === 'of') {
         delete badWordsProtectDb[chatId];
-        fs.writeFileSync('./bad_words_protect.json', JSON.stringify(badWordsProtectDb, null, 2));
+        save(FILES.BAD_WORDS_PROTECT, badWordsProtectDb);
         await sock.sendMessage(chatId, { text: '❌ *تم إيقاف فلتر الألفاظ البذيئة*' });
     } else {
         await sock.sendMessage(chatId, { text: '⚠️ `.منع on` أو `.منع of`' });
@@ -88,7 +87,7 @@ commands['.اضف'] = async (sock, msg, args, ctx) => {
     if (proBadWords.includes(newWord))
         return sock.sendMessage(chatId, { text: `⚠️ الكلمة *${newWord}* موجودة مسبقاً.` });
     proBadWords.push(newWord);
-    fs.writeFileSync('./pro_bad_words.json', JSON.stringify(proBadWords, null, 2));
+    save(FILES.PRO_BAD_WORDS, proBadWords);
     await sock.sendMessage(chatId, { text: `✅ تمت إضافة *${newWord}* لقائمة الألفاظ.` });
 };
 

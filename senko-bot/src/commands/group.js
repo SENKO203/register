@@ -6,17 +6,19 @@ const axios = require('axios');
 const { downloadMediaMessage } = require('@itsliaaa/baileys');
 
 const {
-    FILES, save,
+    SUPER_OWNERS, OWNERS, FILES, SNAPSHOTS_DIR
+} = require('../config');
+const {
+    save,
     config, adminsDb, emojiDb, mutedDb, banDb,
     protectedGroups, monitoredGroups, logDb,
-    SUPER_OWNERS, OWNERS, SNAPSHOTS_DIR
-} = require('../../database');
+} = require('../database');
 const {
     numOf, resolveId, isBotJid, isProtectedParticipant,
     isAuth, isUserProtected, getMeta, invalidateMeta,
-    changeGroupPic, makeSticker, processStickerBatch,
-    RAID_MSG, RAID_DESC
-} = require('../../helpers');
+    changeGroupPic, RAID_MSG, RAID_DESC
+} = require('../helpers');
+const { makeSticker, processStickerBatch } = require('../sticker');
 
 // raidVidBuffer - loaded once if exists
 let raidVidBuffer = null;

@@ -18,9 +18,8 @@
  */
 'use strict';
 
-const fs = require('fs');
 const {
-    FILES, ANIME_CHARS, OWNERS, SUPER_OWNER, BOT_LID, BOT_NUM,
+    FILES, OWNERS, SUPER_OWNER,
 } = require('../config');
 const {
     save, resolveId, numOf, isBotJid,

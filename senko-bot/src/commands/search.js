@@ -193,7 +193,7 @@ const commands = {};
 // .صور — Pinterest HTML image search
 commands['.صور'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ اكتب ما تبحث عنه: `.صور [اسم]`' });
     try {
         await sock.sendMessage(chatId, { text: `🔍 جاري جلب صور: *${args}*...` });
         const query = encodeURIComponent(args + ' anime');
@@ -231,7 +231,7 @@ commands['.صور'] = async (sock, msg, args, ctx) => {
 // .صورة — Safebooru anime image search
 commands['.صورة'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ اكتب ما تبحث عنه: `.صورة [اسم] [عدد]`' });
     const parts = args.trim().split(/\s+/);
     let count = 1;
     let queryParts = parts;
@@ -270,7 +270,7 @@ commands['.صورة'] = async (sock, msg, args, ctx) => {
 // .pen — anime character search with anime name prompt
 commands['.pen'] = async (sock, msg, args, ctx) => {
     const { chatId, senderNum } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ اكتب اسم الشخصية: `.pen [اسم] [عدد]`' });
     const parts = args.trim().split(/\s+/);
     let count = 1;
     let queryParts = parts;
@@ -308,7 +308,7 @@ commands['.بحث_صور'] = async (sock, msg, args, ctx) => {
 // .بنترست — direct Pinterest search
 commands['.بنترست'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ اكتب ما تبحث عنه: `.بنترست [اسم] [عدد]`' });
     const parts = args.trim().split(/\s+/);
     let count = 3;
     let queryParts = parts;

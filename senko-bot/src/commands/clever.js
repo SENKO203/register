@@ -44,7 +44,7 @@ commands['.clev'] = async (sock, msg, args, ctx) => {
 // .clev.gpt — Groq Llama 3.1-8b
 commands['.clev.gpt'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ اكتب سؤالك: `.clev.gpt [سؤال]`' });
     await sock.sendMessage(chatId, { text: '🤖 جاري التفكير...' });
     try {
         const r = await axios.post('https://api.groq.com/openai/v1/chat/completions',
@@ -64,7 +64,7 @@ commands['.clev.gpt'] = async (sock, msg, args, ctx) => {
 // .clev.gemini — Google Gemini
 commands['.clev.gemini'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ اكتب سؤالك: `.clev.gemini [سؤال]`' });
     await sock.sendMessage(chatId, { text: '✨ جاري التفكير مع Gemini...' });
     try {
         const r = await axios.post(
@@ -79,7 +79,7 @@ commands['.clev.gemini'] = async (sock, msg, args, ctx) => {
 // .clev.groq — Groq Llama 3.3-70b
 commands['.clev.groq'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ اكتب سؤالك: `.clev.groq [سؤال]`' });
     await sock.sendMessage(chatId, { text: '⚡ جاري Groq...' });
     try {
         const r = await axios.post('https://api.groq.com/openai/v1/chat/completions',
@@ -92,7 +92,7 @@ commands['.clev.groq'] = async (sock, msg, args, ctx) => {
 // .clev.tts — Text-to-speech
 commands['.clev.tts'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ اكتب النص: `.clev.tts [نص]`' });
     try {
         const ttsText = args.trim();
         const isArabic = /[؀-ۿ]/.test(ttsText);
@@ -138,7 +138,7 @@ commands['.clev.tts'] = async (sock, msg, args, ctx) => {
 // .clev.movie — OMDB movie search
 commands['.clev.movie'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ اكتب اسم الفيلم: `.clev.movie [اسم]`' });
     try {
         const r = await axios.get(`http://www.omdbapi.com/?apikey=${OMDB_KEY}&t=${encodeURIComponent(args)}&plot=short`, { timeout: 10000 });
         const m = r.data;
@@ -154,7 +154,7 @@ commands['.clev.movie'] = async (sock, msg, args, ctx) => {
 // .clev.ss — Website screenshot
 commands['.clev.ss'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ مثال: `.clev.ss https://google.com`' });
     if (!args.startsWith('http')) return sock.sendMessage(chatId, { text: '❌ مثال: .clev.ss https://google.com' });
     await sock.sendMessage(chatId, { text: '📸 جاري أخذ لقطة الشاشة...' });
     try {
@@ -166,7 +166,7 @@ commands['.clev.ss'] = async (sock, msg, args, ctx) => {
 // .clev.trt — Google Translate (quick)
 commands['.clev.trt'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
-    if (!args) return;
+    if (!args) return sock.sendMessage(chatId, { text: '⚠️ مثال: `.clev.trt en مرحبا`' });
     const qCtxT = msg?.message?.extendedTextMessage?.contextInfo;
     const qTxt = qCtxT?.quotedMessage?.conversation || qCtxT?.quotedMessage?.extendedTextMessage?.text;
     const pT = args.split(' '); const tl = pT[0] || 'ar';

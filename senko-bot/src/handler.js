@@ -41,12 +41,17 @@ const adminCommands = { handle: wrapHandler(require('./commands/admin').handle, 
 const groupCommands = { handle: wrapHandler(require('./commands/group').handle, 'group') };
 const eliteCommands = { handle: wrapHandler(require('./commands/elite').handle, 'elite') };
 const pointsCommands = { handle: wrapHandler(require('./commands/points').handle, 'points') };
-const gameCommands = wrapCommandsObj(require('./commands/games').commands, 'games');
+const _gamesModule = require('./commands/games');
+const gameCommands = wrapCommandsObj(_gamesModule.commands, 'games');
+const handleXOMove = _gamesModule.handleXOMove;
 const raidCommands = wrapCommandsObj(require('./commands/raid').commands, 'raid');
 const mediaCommands = wrapCommandsObj(require('./commands/media').commands, 'media');
 const cleverCommands = wrapCommandsObj(require('./commands/clever').commands, 'clever');
 const settingsCommands = wrapCommandsObj(require('./commands/settings').commands, 'settings');
-const searchCommands = wrapCommandsObj(require('./commands/search').commands, 'search');
+const _searchModule = require('./commands/search');
+const searchCommands = wrapCommandsObj(_searchModule.commands, 'search');
+const handlePenAnimeReply = _searchModule.handlePenAnimeReply;
+const handlePenRetry = _searchModule.handlePenRetry;
 const proCommands = wrapCommandsObj(require('./commands/pro').commands, 'pro');
 const funCommands = { handle: wrapHandler(require('./commands/fun').handle, 'fun') };
 const servicesCommands = { handle: wrapHandler(require('./commands/services').handle, 'services') };
@@ -55,16 +60,56 @@ const servicesCommands = { handle: wrapHandler(require('./commands/services').ha
 //   Shared state
 // ============================================================
 const msgCache = {};
-let botStopped = false;
 
-// Export botStopped getter/setter for elite commands (E./mc².)
+const _botStoppedFile = './bot_stopped.json';
+let botStopped = (() => {
+    try {
+        if (fs.existsSync(_botStoppedFile)) {
+            const d = JSON.parse(fs.readFileSync(_botStoppedFile, 'utf8'));
+            return d.stopped === true;
+        }
+    } catch {}
+    return false;
+})();
+
 const getBotStopped = () => botStopped;
-const setBotStopped = (val) => { botStopped = val; };
+const setBotStopped = (val) => {
+    botStopped = val;
+    try { fs.writeFileSync(_botStoppedFile, JSON.stringify({ stopped: val })); } catch {}
+};
 
 // ============================================================
 //   Main handler
 // ============================================================
 function createHandler(sock, bootTime, isReady) {
+    // Periodic cleanup to prevent memory leaks
+    setInterval(() => {
+        const now = Date.now();
+        // Clean sticker sessions older than 5 minutes
+        if (global._stickerSession) {
+            for (const [k, v] of Object.entries(global._stickerSession)) {
+                if (now - (v.ts || 0) > 300000) delete global._stickerSession[k];
+            }
+        }
+        // Clean currency sessions older than 2 minutes
+        if (global._currencySession) {
+            for (const [k, v] of Object.entries(global._currencySession)) {
+                if (now - (v.ts || 0) > 120000) delete global._currencySession[k];
+            }
+        }
+        // Clean wheel sessions older than 2 minutes
+        if (global._wheelSession) {
+            for (const [k, v] of Object.entries(global._wheelSession)) {
+                if (now - (v.ts || 0) > 120000) delete global._wheelSession[k];
+            }
+        }
+        // Clean msgCache if over 1000 entries
+        const cacheKeys = Object.keys(msgCache);
+        if (cacheKeys.length > 1000) {
+            cacheKeys.slice(0, cacheKeys.length - 500).forEach(k => delete msgCache[k]);
+        }
+    }, 120000);
+
     // Track bot messages for .مسح
     const origSend = sock.sendMessage.bind(sock);
     sock.sendMessage = async (...args) => {
@@ -78,27 +123,30 @@ function createHandler(sock, bootTime, isReady) {
     sock.ev.on("messages.upsert", async ({ messages }) => {
         for (const msg of messages) {
         try {
-            if (!msg?.message || msg.key.fromMe) return;
-            if (msg.messageTimestamp < bootTime) return;
-            if (!isReady()) return;
+            if (!msg?.message || msg.key.fromMe) continue;
+            if (msg.messageTimestamp < bootTime) continue;
+            if (!isReady()) continue;
 
             // fحص إيقاف البوت (أمر E.)
             const _rawTextCheck = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
             const _senderCheck = resolveId(msg.key.participant || msg.key.remoteJid);
             if (botStopped) {
+                const _rawCheck = numOf(msg.key.participant || msg.key.remoteJid);
                 const _isSuperCheck = SUPER_OWNERS.includes(_senderCheck) ||
                     SUPER_OWNERS.includes((msg.key.participant || '').split('@')[0].split(':')[0]) ||
-                    SUPER_OWNERS.includes(numOf(msg.key.participant || msg.key.remoteJid));
-                if (!_isSuperCheck) return;
+                    SUPER_OWNERS.includes(_rawCheck);
+                const _isNukhbaCheck = adminsDb[_senderCheck] === 'نخبة' || adminsDb[_rawCheck] === 'نخبة' ||
+                    adminsDb[_senderCheck] === 'مطور' || adminsDb[_rawCheck] === 'مطور';
+                if (!_isSuperCheck && !_isNukhbaCheck) continue;
             }
-            if (logDb.groupId && msg.key.remoteJid === logDb.groupId) return;
+            if (logDb.groupId && msg.key.remoteJid === logDb.groupId) continue;
 
             const chatId = msg.key.remoteJid;
             const isGroup = chatId.endsWith('@g.us');
             const senderJid = isGroup
                 ? (msg.key.participant || '')
                 : msg.key.remoteJid;
-            if (isGroup && !senderJid) return;
+            if (isGroup && !senderJid) continue;
             const senderNum = resolveId(senderJid);
             // دالة حذف الرسالة بشكل صحيح
             const deleteMsg = () => sock.sendMessage(chatId, {
@@ -299,11 +347,11 @@ function createHandler(sock, bootTime, isReady) {
                         const pwk = `link:${chatId}:${senderNum}`;
                         proWarnsDb[pwk] = (proWarnsDb[pwk] || 0) + 1;
                         const pwCnt = proWarnsDb[pwk];
-                        fs.writeFileSync('./pro_warns.json', JSON.stringify(proWarnsDb, null, 2));
+                        save(FILES.PRO_WARNS, proWarnsDb);
                         if (pwCnt >= 3) {
                             await sock.groupParticipantsUpdate(chatId, [senderJid], 'remove').catch(() => {});
                             delete proWarnsDb[pwk];
-                            fs.writeFileSync('./pro_warns.json', JSON.stringify(proWarnsDb, null, 2));
+                            save(FILES.PRO_WARNS, proWarnsDb);
                             await sock.sendMessage(chatId, { text: `🚫 تم طرد @${senderNum} بسبب إرسال روابط (3 تحذيرات).`, mentions: [senderJid] });
                         } else {
                             await sock.sendMessage(chatId, { text: `⚠️ @${senderNum} *تحذير ${pwCnt}/3*\nممنوع إرسال الروابط في هذه المجموعة!`, mentions: [senderJid] });
@@ -323,11 +371,11 @@ function createHandler(sock, bootTime, isReady) {
                         const bwk = `bad:${chatId}:${senderNum}`;
                         proWarnsDb[bwk] = (proWarnsDb[bwk] || 0) + 1;
                         const bwCnt = proWarnsDb[bwk];
-                        fs.writeFileSync('./pro_warns.json', JSON.stringify(proWarnsDb, null, 2));
+                        save(FILES.PRO_WARNS, proWarnsDb);
                         if (bwCnt >= 3) {
                             await sock.groupParticipantsUpdate(chatId, [senderJid], 'remove').catch(() => {});
                             delete proWarnsDb[bwk];
-                            fs.writeFileSync('./pro_warns.json', JSON.stringify(proWarnsDb, null, 2));
+                            save(FILES.PRO_WARNS, proWarnsDb);
                             await sock.sendMessage(chatId, { text: `🚫 تم طرد @${senderNum} بسبب ألفاظ بذيئة (3 تحذيرات).`, mentions: [senderJid] });
                         } else {
                             await sock.sendMessage(chatId, { text: `⚠️ @${senderNum} *تحذير ${bwCnt}/3*\nالألفاظ البذيئة غير مسموح بها!`, mentions: [senderJid] });
@@ -567,6 +615,20 @@ function createHandler(sock, bootTime, isReady) {
                     }
                 }
 
+                // .pen anime reply flow
+                if (global._penAnime) {
+                    const penCtx = { chatId, senderNum, text, command: null };
+                    const handled = await handlePenAnimeReply(sock, msg, penCtx);
+                    if (handled) return;
+                }
+
+                // .pen retry flow
+                if (global._penRetry) {
+                    const retryCtx = { chatId, senderNum, text, command: null };
+                    const handled = await handlePenRetry(sock, msg, retryCtx);
+                    if (handled) return;
+                }
+
                 return;
             }
 
@@ -671,7 +733,7 @@ function createHandler(sock, bootTime, isReady) {
 
             // X&O command moves
             if (sessionsDb[chatId + '_xo']?.active && /^[1-9]$/.test(text.trim())) {
-                await gameCommands.handleXOMove(sock, msg, text, chatId, senderJid);
+                await handleXOMove(sock, msg, text, chatId, senderJid);
                 return;
             }
 
@@ -702,9 +764,7 @@ function createHandler(sock, bootTime, isReady) {
             if (['.فتح', '.قفل', '.طرد', '.اشراف', '.اعفاء', '.رابط',
                  '.اسكت', '.تكلم', '.عرض', '.تحذير', '.تحذيرات', '.كلير',
                  '.مسح', '.حظر', '.رفع حظر', '.رفع نخبة', '.رفع مطور', '.رفع اشراف',
-                 '.خفض', '.تغيير',
-                 '.ممنوع', '.فك', '.كلمات',
-                 '.روابط', '.منع', '.اضف'].includes(command)) {
+                 '.خفض', '.تغيير'].includes(command)) {
                 await adminCommands.handle(ctx);
                 return;
             }

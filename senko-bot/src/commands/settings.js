@@ -19,7 +19,7 @@ const axios = require('axios');
 const { downloadMediaMessage } = require('@itsliaaa/baileys');
 
 const TERMUX_TMP = process.env.TMPDIR || '/data/data/com.termux/files/usr/tmp';
-const REMOVEBG_KEY = process.env.REMOVEBG_KEY || 'fZUkHYfA79m9MDheSPo1gzS2';
+const REMOVEBG_KEY = process.env.REMOVEBG_KEY || '';
 
 // ============================================================
 //  Async ffmpeg helper

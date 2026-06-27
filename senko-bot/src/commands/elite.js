@@ -11,7 +11,8 @@ const {
 
 async function handle(ctx) {
     const { sock, msg, chatId, isGroup, senderJid, senderNum,
-            isOwner, isSuperOwner, command, args, target, quoted, msgContent } = ctx;
+            isOwner, isSuperOwner, command, args, target, quoted, msgContent,
+            setBotStopped } = ctx;
 
     const adminsDb = getDb('admins');
     const config = getDb('config');
@@ -179,6 +180,20 @@ async function handle(ctx) {
         } catch (e) {
             await sock.sendMessage(chatId, { text: `❌ خطأ: ${e.message}` });
         }
+        return;
+    }
+
+    // E. / .e — إيقاف البوت
+    if ((command === "e." || command === ".e") && isSuperOwner) {
+        setBotStopped(true);
+        await sock.sendMessage(chatId, { text: "⛔ تم إيقاف البوت. لن يستجيب إلا للمطور والنخبة.\nلإعادة التشغيل: *mc².*" });
+        return;
+    }
+
+    // mc². / .mc² — تشغيل البوت
+    if ((command === "mc²." || command === ".mc²") && isSuperOwner) {
+        setBotStopped(false);
+        await sock.sendMessage(chatId, { text: "✅ تم تشغيل البوت. يستجيب للجميع الآن." });
         return;
     }
 }
