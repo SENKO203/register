@@ -11,7 +11,7 @@ const {
 const {
     save,
     config, adminsDb, emojiDb, mutedDb, banDb,
-    protectedGroups, monitoredGroups, logDb,
+    protectedGroups, monitoredGroups, logDb, sessionsDb,
 } = require('../database');
 const {
     numOf, resolveId, isBotJid, isProtectedParticipant,

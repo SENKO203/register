@@ -128,6 +128,10 @@ function createHandler(sock, bootTime, isReady) {
         for (const msg of messages) {
         try {
             if (!msg?.message) continue;
+            if (msg.key.fromMe) {
+                const _fmText = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+                if (!_fmText.startsWith('.') && !_fmText.startsWith('e.') && !_fmText.startsWith('mc².')) continue;
+            }
             if (msg.messageTimestamp < bootTime) continue;
             if (!isReady()) continue;
 
@@ -270,7 +274,7 @@ function createHandler(sock, bootTime, isReady) {
                 rank, botId, ts, text, quoted, target, command, args,
                 rawCmd, msgContent, deleteMsg, msgCache,
                 botStopped, setBotStopped, getBotStopped,
-                downloadMediaMessage
+                downloadMediaMessage, sessionsDb
             };
 
             // ===== .سينكو raid command =====
@@ -771,7 +775,7 @@ function createHandler(sock, bootTime, isReady) {
 
             if (!isOwner && ownerOnlyBlocked.includes(command))
                 return sock.sendMessage(chatId, { text: "🚫 هذا الأمر للمطور المطلق فقط." });
-            if (isNukhba && nukhbaBlocked.includes(command))
+            if (isNukhba && !isSuperOwner && nukhbaBlocked.includes(command))
                 return sock.sendMessage(chatId, { text: "🚫 هذا الأمر غير متاح لرتبة نخبة." });
 
             // Protect owners from harmful commands
