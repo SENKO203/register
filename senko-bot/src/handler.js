@@ -32,6 +32,7 @@ const {
 
 const { makeSticker, processStickerBatch } = require('./sticker');
 const { safeExecute, wrapHandler, wrapCommandsObj } = require('./anti-crash');
+const { wrapSockWithStealth, simulateReadReceipt } = require('./stealth');
 
 // ============================================================
 //   Command modules (wrapped with anti-crash)
@@ -110,10 +111,13 @@ function createHandler(sock, bootTime, isReady) {
         }
     }, 120000);
 
+    // Anti-ban stealth: wrap sendMessage with human-like delays
+    wrapSockWithStealth(sock);
+
     // Track bot messages for .مسح
-    const origSend = sock.sendMessage.bind(sock);
+    const _stealthSend = sock.sendMessage.bind(sock);
     sock.sendMessage = async (...args) => {
-        const result = await origSend(...args);
+        const result = await _stealthSend(...args);
         if (result?.key?.id && args[0]) {
             trackBotMsg(args[0], result.key.id);
         }
@@ -636,12 +640,8 @@ function createHandler(sock, bootTime, isReady) {
             //   Command routing
             // ============================================================
 
-            // Anti-ban: typing simulation before responding
-            try {
-                await sock.presenceSubscribe(chatId);
-                await sock.sendPresenceUpdate('composing', chatId);
-                await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
-            } catch {}
+            // Simulate reading the message before replying
+            simulateReadReceipt(sock, msg);
 
             // Points commands
             if (['.نقاطي', '.ترتيب', '.متجر', '.استبدال', '.تحويل'].includes(command)) {
