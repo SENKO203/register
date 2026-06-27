@@ -1,5 +1,7 @@
 'use strict';
 
+const axios = require('axios');
+const { downloadMediaMessage } = require('@itsliaaa/baileys');
 const { FILES } = require('../config');
 const { getDb } = require('../database');
 const { save, httpsGet, resolveId } = require('../helpers');
@@ -193,6 +195,98 @@ async function handle(ctx) {
             amount, fromCurr, msgId: sentMenu.key.id,
             ts: Date.now(), senderNum
         };
+        return;
+    }
+
+    // .صوت — تحميل أغنية بالاسم
+    if (command === ".صوت") {
+        const query = (args || '').trim();
+        if (!query) return sock.sendMessage(chatId, { text: "⚠️ .صوت [اسم الأغنية]\nمثال: .صوت فيروز بحبك" });
+        await sock.sendMessage(chatId, { text: '🔍 جاري البحث عن: ' + query });
+        try {
+            const searchUrl = `https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query)}&filter=music_songs`;
+            const searchRes = await axios.get(searchUrl, { timeout: 15000 });
+            const items = searchRes.data?.items || [];
+            if (!items.length) return sock.sendMessage(chatId, { text: '❌ لم يتم العثور على نتائج.' });
+            const video = items[0];
+            const videoUrl = `https://youtube.com${video.url}`;
+            const COBALT_URL = 'https://api.cobalt.tools/';
+            const body = { url: videoUrl, isAudioOnly: true, aFormat: 'mp3', disableMetadata: true };
+            const r = await axios.post(COBALT_URL, body, {
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                timeout: 30000
+            });
+            const dlUrl = r.data?.url;
+            if (!dlUrl) throw new Error('فشل جلب رابط التحميل');
+            const audioRes = await axios.get(dlUrl, { responseType: 'arraybuffer', timeout: 120000 });
+            await sock.sendMessage(chatId, {
+                audio: Buffer.from(audioRes.data),
+                mimetype: 'audio/mpeg',
+                ptt: false,
+                fileName: `${video.title || query}.mp3`
+            });
+        } catch (e) {
+            await sock.sendMessage(chatId, { text: `❌ فشل تحميل الأغنية: ${e.message}` });
+        }
+        return;
+    }
+
+    // .سيرش — بحث عكسي عن صورة (أنمي/فيلم/شخصية)
+    if (command === ".سيرش") {
+        const qC = msg.message?.extendedTextMessage?.contextInfo;
+        const hasImg = qC?.quotedMessage?.imageMessage || msg?.message?.imageMessage;
+        if (!hasImg) return sock.sendMessage(chatId, { text: "⚠️ رد على صورة لمعرفة معلومات عنها (شخصية أنمي/فيلم/مانغا)" });
+        await sock.sendMessage(chatId, { text: '🔍 جاري تحليل الصورة...' });
+        try {
+            const dlMsg = qC?.stanzaId
+                ? { key: { remoteJid: chatId, id: qC.stanzaId, participant: qC.participant }, message: qC.quotedMessage }
+                : msg;
+            const buf = await downloadMediaMessage(dlMsg, 'buffer', {}, { reuploadRequest: sock.updateMediaMessage });
+            const FormData = require('form-data');
+            const form = new FormData();
+            form.append('image', buf, { filename: 'search.jpg', contentType: 'image/jpeg' });
+            const r = await axios.post('https://api.trace.moe/search', form, {
+                headers: form.getHeaders(),
+                timeout: 30000
+            });
+            const results = r.data?.result;
+            if (!results?.length) return sock.sendMessage(chatId, { text: '❌ لم يتم التعرف على الصورة.' });
+            const top = results[0];
+            const similarity = (top.similarity * 100).toFixed(1);
+            const anilistId = top.anilist;
+            let animeInfo = '';
+            try {
+                const aniRes = await axios.post('https://graphql.anilist.co', {
+                    query: `query($id:Int){Media(id:$id){title{romaji native english}format episodes genres averageScore description(asHtml:false)}}`,
+                    variables: { id: anilistId }
+                }, { timeout: 10000 });
+                const media = aniRes.data?.data?.Media;
+                if (media) {
+                    const title = media.title?.english || media.title?.romaji || '';
+                    const titleJp = media.title?.native || '';
+                    const desc = (media.description || '').replace(/<[^>]+>/g, '').slice(0, 200);
+                    animeInfo = [
+                        `🎬 *نتيجة البحث العكسي*`,
+                        `*━━━━━━━━━━━━━━━━━━*`,
+                        `*│📛 الاسم:* ${title}`,
+                        titleJp ? `*│🇯🇵 ياباني:* ${titleJp}` : '',
+                        `*│📊 التطابق:* ${similarity}%`,
+                        `*│📺 النوع:* ${media.format || '—'}`,
+                        media.episodes ? `*│📋 الحلقات:* ${media.episodes}` : '',
+                        `*│⭐ التقييم:* ${media.averageScore || '—'}/100`,
+                        media.genres?.length ? `*│🏷️ التصنيف:* ${media.genres.join(', ')}` : '',
+                        `*━━━━━━━━━━━━━━━━━━*`,
+                        desc ? `*📝 الوصف:*\n${desc}...` : '',
+                    ].filter(Boolean).join('\n');
+                }
+            } catch {}
+            if (!animeInfo) {
+                animeInfo = `🎬 *نتيجة البحث*\n*━━━━━━━━━━━━━━━━━━*\n*│📛 الاسم:* ${top.filename || 'غير معروف'}\n*│📊 التطابق:* ${similarity}%\n*│📋 الحلقة:* ${top.episode || '—'}\n*━━━━━━━━━━━━━━━━━━*`;
+            }
+            await sock.sendMessage(chatId, { text: animeInfo });
+        } catch (e) {
+            await sock.sendMessage(chatId, { text: `❌ فشل البحث: ${e.message}` });
+        }
         return;
     }
 }

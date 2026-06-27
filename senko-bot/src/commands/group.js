@@ -640,6 +640,35 @@ async function handle(ctx) {
     // ============================================================
     //   .نسخ / .نسخ-save / .نسخ-عرض / .لصق / .حذف-نسخة — Snapshots
     // ============================================================
+    if (command === ".نسخ" && !isGroup && isOwner && args.trim()) {
+        const targetName = args.trim().toLowerCase();
+        try {
+            const allGroups = await sock.groupFetchAllParticipating();
+            const found = Object.entries(allGroups).find(([, g]) => g.subject.toLowerCase() === targetName);
+            if (!found) return sock.sendMessage(chatId, { text: `❌ لم أجد جروباً باسم: "${args.trim()}"` });
+            const [gId, gInfo] = found;
+            const desc = gInfo.desc || '';
+            let picBase64 = null;
+            let picBuf = null;
+            try {
+                const picUrl = await sock.profilePictureUrl(gId, 'image');
+                if (picUrl) {
+                    const picRes = await axios.get(picUrl, { responseType: 'arraybuffer', timeout: 10000 });
+                    picBuf = Buffer.from(picRes.data);
+                    picBase64 = picBuf.toString('base64');
+                }
+            } catch {}
+            const sent = await sock.sendMessage(chatId, {
+                text: `📋 *تم جلب بيانات الجروب:*\n*━━━━━━━━━━━━━━━━━━*\n*│📛* ${gInfo.subject}\n*│🖼️* ${picBase64 ? '✅' : '❌'}\n*━━━━━━━━━━━━━━━━━━*\n💡 *أرسل اسم النسخة رداً على هذه الرسالة*`
+            });
+            global._remoteCopy = global._remoteCopy || {};
+            global._remoteCopy[chatId + ':' + senderNum] = {
+                name: gInfo.subject, desc, pic: picBase64, msgId: sent.key.id, ts: Date.now()
+            };
+        } catch (e) { await sock.sendMessage(chatId, { text: "❌ " + e.message }); }
+        return;
+    }
+
     if (command === ".نسخ" && isGroup && isOwner) {
         try {
             const meta = await getMeta(sock, chatId);
@@ -716,16 +745,16 @@ async function handle(ctx) {
                 const nm = f.replace('.json','');
                 if (!seenNames.has(nm)) { seenNames.add(nm); unique.push(f); }
             }
-            let list = "🧭 *النسخ المحفوظة:*\n*━━━━━━━━━━━━━━━━━━*\n";
+            let list = "🧭 *النسخ المحفوظة:*\n*━━━━━━━━━━━━━━━━━━*\n\n";
             unique.forEach((f, i) => {
                 const snapName = f.replace('.json','');
-                let groupName = snapName, date = '';
+                let hasPic = false;
                 try {
                     const d = JSON.parse(fs.readFileSync(SNAPSHOTS_DIR + '/' + f));
-                    if (d.name) groupName = d.name;
-                    if (d.date) date = ` — ${d.date}`;
+                    hasPic = !!d.pic;
                 } catch {}
-                list += `*${i+1}.* 📁 *${groupName}*${date}\n`;
+                list += `*${i+1}.* 📁 *${snapName}*\n`;
+                list += `    ${hasPic ? '✅ 🖼️' : '❌ 🖼️'} |\n\n`;
             });
             list += "*━━━━━━━━━━━━━━━━━━*\n";
             list += "*.لصق [رقم]* أو *.لصق [اسم]*\n";
@@ -831,40 +860,76 @@ async function handle(ctx) {
     //   .تست — Test bot connection
     // ============================================================
     if (command === ".تست" && isOwner) {
+        const brandName = config.brandName || 'SENKO';
+        const brandStatus = config.brandStatus || `*${brandName} BOT IS WORKING NOW..?*`;
+        const brandFooter = config.brandFooter || `Powered by ${brandName} AI`;
+        const brandChannel = config.brandChannel || '';
+
         const vidDir = path.join(__dirname, '..', '..', 'Dr.4');
         let vidPath = null;
         for (const c of ["mb.mp5", "mb.mp4", "mb.MP4"]) {
             const p = path.join(vidDir, c);
             if (fs.existsSync(p)) { vidPath = p; break; }
         }
-        const testText = [
-            "🧭 *𝑫𝒓. 𝑺𝒕𝒐𝒏𝒆* 🧭",
-            "*━━━━━━━━━━━━━━━━━━*",
-            "🧭 *| 𝑸𝑨𝑰𝑴𝑨 |*",
-            "*━━━━━━━━━━━━━━━━━━*",
-            "*│.menu* — القائمة الرئيسية",
-            "ـــــــــــــ",
-            "*│.admin* — أوامر الإدارة",
-            "ـــــــــــــ",
-            "*│.group* — أوامر المجموعة",
-            "ـــــــــــــ",
-            "*│.raid* — أوامر الغزو",
-            "ـــــــــــــ",
-            "*│.game* — الألعاب والفعاليات",
-            "ـــــــــــــ",
-            "*│.points* — نقاطك وترتيبك",
-            "ـــــــــــــ",
-            "*│.elite* — قائمة النخبة",
-            "ـــــــــــــ",
-            "*│.gen* — قائمة العامة",
-            "*━━━━━━━━━━━━━━━━━━*",
-            "🧭 *𝑫𝒓. 𝑺𝒕𝒐𝒏𝒆* 🧭"
-        ].join("\n");
+
+        const testText = `*${brandStatus}*`;
+
         if (vidPath) {
-            await sock.sendMessage(chatId, { video: fs.readFileSync(vidPath), ptv: true, mimetype: "video/mp4", caption: testText });
-        } else {
-            await sock.sendMessage(chatId, { text: testText + "\n\n⚠️ لم يُعثر على mb.mp5 في مجلد Dr.4" });
+            const msgOpts = {
+                video: fs.readFileSync(vidPath),
+                ptv: true,
+                mimetype: "video/mp4",
+            };
+            await sock.sendMessage(chatId, msgOpts);
         }
+
+        const linkPreview = {
+            text: testText,
+        };
+        if (brandChannel) {
+            linkPreview.text = testText + '\n\n' + brandChannel;
+        }
+        await sock.sendMessage(chatId, linkPreview);
+        return;
+    }
+
+    // .ربط — تغيير قناة البوت
+    if (command === ".ربط" && isSuperOwner) {
+        const link = (args || '').trim();
+        if (!link) return sock.sendMessage(chatId, { text: "⚠️ .ربط [رابط القناة]\nمثال: .ربط https://whatsapp.com/channel/xxx" });
+        config.brandChannel = link;
+        save(FILES.CONFIG, config);
+        await sock.sendMessage(chatId, { text: `✅ تم تغيير قناة البوت إلى:\n${link}` });
+        return;
+    }
+
+    // .خانة — تغيير رسالة الحالة (مثل "BOT IS WORKING NOW")
+    if (command === ".خانة" && isSuperOwner) {
+        const txt = (args || '').trim();
+        if (!txt) return sock.sendMessage(chatId, { text: "⚠️ .خانة [النص الجديد]\nمثال: .خانة SENKO BOT IS WORKING NOW" });
+        config.brandStatus = txt;
+        save(FILES.CONFIG, config);
+        await sock.sendMessage(chatId, { text: `✅ تم تغيير رسالة الحالة إلى:\n*${txt}*` });
+        return;
+    }
+
+    // .عدل — تغيير اسم البراند (فوق github)
+    if (command === ".عدل" && isSuperOwner) {
+        const txt = (args || '').trim();
+        if (!txt) return sock.sendMessage(chatId, { text: "⚠️ .عدل [الاسم الجديد]\nمثال: .عدل Dr.Stone" });
+        config.brandName = txt;
+        save(FILES.CONFIG, config);
+        await sock.sendMessage(chatId, { text: `✅ تم تغيير اسم البراند إلى: *${txt}*` });
+        return;
+    }
+
+    // .تعدل — تغيير نص الفوتر (مثل "Powered by X AI")
+    if (command === ".تعدل" && isSuperOwner) {
+        const txt = (args || '').trim();
+        if (!txt) return sock.sendMessage(chatId, { text: "⚠️ .تعدل [النص الجديد]\nمثال: .تعدل Powered by SENKO AI" });
+        config.brandFooter = txt;
+        save(FILES.CONFIG, config);
+        await sock.sendMessage(chatId, { text: `✅ تم تغيير الفوتر إلى: *${txt}*` });
         return;
     }
 

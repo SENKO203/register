@@ -64,6 +64,8 @@ commands['.med'] = async (sock, msg, args, ctx) => {
 commands['.med.ytv'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
     if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل الرابط: `.med.ytv [رابط]`' });
+    if (!args.includes('youtube.com') && !args.includes('youtu.be'))
+        return sock.sendMessage(chatId, { text: '❌ أرسل رابط YouTube صالح' });
     await sock.sendMessage(chatId, { text: '⏳ جاري التحميل...' });
     try {
         const dlUrl = await cobaltDl(args.trim());
@@ -78,6 +80,8 @@ commands['.med.ytv'] = async (sock, msg, args, ctx) => {
 commands['.med.yta'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
     if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل الرابط: `.med.yta [رابط]`' });
+    if (!args.includes('youtube.com') && !args.includes('youtu.be'))
+        return sock.sendMessage(chatId, { text: '❌ أرسل رابط YouTube صالح' });
     await sock.sendMessage(chatId, { text: '⏳ جاري التحميل...' });
     try {
         const dlUrl = await cobaltDl(args.trim(), true);
@@ -90,6 +94,8 @@ commands['.med.yta'] = async (sock, msg, args, ctx) => {
 commands['.med.tiktok'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
     if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل الرابط: `.med.tiktok [رابط]`' });
+    if (!args.includes('tiktok.com') && !args.includes('tiktok'))
+        return sock.sendMessage(chatId, { text: '❌ أرسل رابط TikTok صالح' });
     await sock.sendMessage(chatId, { text: '⏳ جاري التحميل...' });
     try {
         let finalUrl = args.trim();
@@ -116,6 +122,8 @@ commands['.med.tiktok'] = async (sock, msg, args, ctx) => {
 commands['.med.twitter'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
     if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل الرابط: `.med.twitter [رابط]`' });
+    if (!args.includes('twitter.com') && !args.includes('x.com'))
+        return sock.sendMessage(chatId, { text: '❌ أرسل رابط Twitter/X صالح' });
     await sock.sendMessage(chatId, { text: '⏳ جاري التحميل...' });
     try {
         const dlUrl = await cobaltDl(args.trim());
@@ -128,6 +136,8 @@ commands['.med.twitter'] = async (sock, msg, args, ctx) => {
 commands['.med.insta'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
     if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل الرابط: `.med.insta [رابط]`' });
+    if (!args.includes('instagram.com'))
+        return sock.sendMessage(chatId, { text: '❌ أرسل رابط Instagram صالح' });
     await sock.sendMessage(chatId, { text: '⏳ جاري التحميل...' });
     const url = args.trim();
     let dlUrl = null;
@@ -173,6 +183,8 @@ commands['.med.insta'] = async (sock, msg, args, ctx) => {
 commands['.med.fb'] = async (sock, msg, args, ctx) => {
     const { chatId } = ctx;
     if (!args) return sock.sendMessage(chatId, { text: '⚠️ أرسل الرابط: `.med.fb [رابط]`' });
+    if (!args.includes('facebook.com') && !args.includes('fb.watch') && !args.includes('fb.com'))
+        return sock.sendMessage(chatId, { text: '❌ أرسل رابط Facebook صالح' });
     await sock.sendMessage(chatId, { text: '⏳ جاري التحميل...' });
     try {
         const dlUrl = await cobaltDl(args.trim());

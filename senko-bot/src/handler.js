@@ -535,6 +535,27 @@ function createHandler(sock, bootTime, isReady) {
                     }
                 }
 
+                // Remote copy reply handler
+                if (global._remoteCopy) {
+                    const rcKey = `${chatId}:${senderNum}`;
+                    const rc = global._remoteCopy[rcKey];
+                    if (rc && Date.now() - rc.ts < 120000) {
+                        const quotedId2 = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
+                        if (quotedId2 === rc.msgId || !quotedId2) {
+                            const snapN = text.trim();
+                            if (snapN) {
+                                const snapDir = require('path').join(process.cwd(), 'snapshots');
+                                if (!require('fs').existsSync(snapDir)) require('fs').mkdirSync(snapDir);
+                                require('fs').writeFileSync(snapDir + '/' + snapN + '.json',
+                                    JSON.stringify({ name: rc.name, desc: rc.desc, pic: rc.pic, date: new Date().toLocaleString('ar') }, null, 2));
+                                delete global._remoteCopy[rcKey];
+                                await sock.sendMessage(chatId, { text: `✅ *تم حفظ نسخة "${snapN}"*\n*│📛* ${rc.name}\n*│🖼️* ${rc.pic ? '✅' : '❌'}\n\n💡 استخدم *.لصق ${snapN}* لتطبيقها` });
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 // Speed select for games
                 if (isGroup && sessionsDb[chatId + '_speed_select']) {
                     const sel = sessionsDb[chatId + '_speed_select'];
@@ -778,7 +799,7 @@ function createHandler(sock, bootTime, isReady) {
 
             // Services commands
             if (['.حاسبة', '.طقس', '.weatherkey', '.currencykey',
-                 '.ترجمة', '.عملة'].includes(command)) {
+                 '.ترجمة', '.عملة', '.صوت', '.سيرش'].includes(command)) {
                 await servicesCommands.handle(ctx);
                 return;
             }
@@ -804,7 +825,7 @@ function createHandler(sock, bootTime, isReady) {
                  '.حماية', '.الغاء_حماية', '.الغاء_مراقبة', '.الغاء',
                  '.ايموج', '.اخرج', '.قبول', '.رفض',
                  '.نسخ', '.نسخ-save', '.نسخ-عرض', '.لصق', '.حذف-نسخة',
-                 '.جهات', '.تست'].includes(command)) {
+                 '.جهات', '.تست', '.ربط', '.خانة', '.عدل', '.تعدل'].includes(command)) {
                 await groupCommands.handle(ctx);
                 return;
             }
