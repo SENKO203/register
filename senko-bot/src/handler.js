@@ -45,6 +45,11 @@ const pointsCommands = { handle: wrapHandler(require('./commands/points').handle
 const _gamesModule = require('./commands/games');
 const gameCommands = wrapCommandsObj(_gamesModule.commands, 'games');
 const handleXOMove = _gamesModule.handleXOMove;
+const runFlagRound = _gamesModule.runFlagRound;
+const runWritingEventRound = _gamesModule.runWritingEventRound;
+const _flagNorm = s => s.trim()
+    .replace(/أ|إ|آ/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+    .replace(/\s+/g, '').toLowerCase();
 const raidCommands = wrapCommandsObj(require('./commands/raid').commands, 'raid');
 const mediaCommands = wrapCommandsObj(require('./commands/media').commands, 'media');
 const cleverCommands = wrapCommandsObj(require('./commands/clever').commands, 'clever');
@@ -480,6 +485,34 @@ function createHandler(sock, bootTime, isReady) {
                             else { await sock.sendMessage(SUPER_OWNER + '@s.whatsapp.net', { text: _logTxt3 }).catch(() => {}); }
                         }
                     }
+
+                    // أعلام (flags)
+                    if (session.type === 'flags' && !msg.key.fromMe && !isBot && !session.answered) {
+                        const normText = _flagNorm(text);
+                        const current = session.flags ? session.flags[session.round] : null;
+                        if (current && current.names.some(n => _flagNorm(n) === normText)) {
+                            session.answered = true;
+                            if (!session.scores[scoreKey]) session.scores[scoreKey] = 0;
+                            session.scores[scoreKey]++;
+                            session.round++;
+                            save(FILES.SESSIONS, sessionsDb);
+                            const _aT = global._botTimers || {};
+                            if (_aT[chatId]) { clearTimeout(_aT[chatId]); delete _aT[chatId]; }
+                            await sock.sendMessage(chatId, { text: `✅ @${scoreKey} +1 (${current.names[0]})`, mentions: [senderJid] });
+                            runFlagRound(sock, chatId);
+                        }
+                    }
+
+                    // حدث صامت (writing_event)
+                    if (session.type === 'writing_event' && !msg.key.fromMe && !isBot && !session.answered) {
+                        if (normalize(text) === normalize(session.answer || '')) {
+                            session.answered = true;
+                            if (!session.scores[scoreKey]) session.scores[scoreKey] = 0;
+                            session.scores[scoreKey]++;
+                            save(FILES.SESSIONS, sessionsDb);
+                            runWritingEventRound(sock, chatId);
+                        }
+                    }
                 }
 
                 // Guess game
@@ -675,7 +708,7 @@ function createHandler(sock, bootTime, isReady) {
             }
 
             // Game commands (writing, counting, dismantling, stop, guess, xo)
-            if (['.كتابة', '.تعداد', '.تفكيك', '.توقف', '.تخمين', '.اكس', '.اكس_توقف'].includes(command)) {
+            if (['.كتابة', '.تعداد', '.تفكيك', '.توقف', '.تخمين', '.اكس', '.اكس_توقف', '.اعلام', '.حدث'].includes(command)) {
                 if (gameCommands[command]) {
                     await gameCommands[command](sock, msg, args, ctx);
                 }

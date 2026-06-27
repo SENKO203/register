@@ -28,6 +28,66 @@ const {
 const { sessionsDb, pointsDb, logDb } = require('../database');
 
 // ============================================================
+//  Country flags data for .اعلام game
+// ============================================================
+const FLAGS_DATA = [
+    { flag: '🇸🇦', names: ['السعودية'] },
+    { flag: '🇦🇪', names: ['الامارات'] },
+    { flag: '🇪🇬', names: ['مصر'] },
+    { flag: '🇯🇴', names: ['الاردن'] },
+    { flag: '🇮🇶', names: ['العراق'] },
+    { flag: '🇰🇼', names: ['الكويت'] },
+    { flag: '🇶🇦', names: ['قطر'] },
+    { flag: '🇧🇭', names: ['البحرين'] },
+    { flag: '🇴🇲', names: ['عمان', 'سلطنة عمان'] },
+    { flag: '🇾🇪', names: ['اليمن'] },
+    { flag: '🇸🇾', names: ['سوريا'] },
+    { flag: '🇱🇧', names: ['لبنان'] },
+    { flag: '🇵🇸', names: ['فلسطين'] },
+    { flag: '🇱🇾', names: ['ليبيا'] },
+    { flag: '🇹🇳', names: ['تونس'] },
+    { flag: '🇩🇿', names: ['الجزائر'] },
+    { flag: '🇲🇦', names: ['المغرب'] },
+    { flag: '🇸🇩', names: ['السودان'] },
+    { flag: '🇯🇵', names: ['اليابان'] },
+    { flag: '🇰🇷', names: ['كوريا', 'كوريا الجنوبية'] },
+    { flag: '🇨🇳', names: ['الصين'] },
+    { flag: '🇺🇸', names: ['امريكا', 'الولايات المتحدة'] },
+    { flag: '🇬🇧', names: ['بريطانيا', 'انجلترا', 'المملكة المتحدة'] },
+    { flag: '🇫🇷', names: ['فرنسا'] },
+    { flag: '🇩🇪', names: ['المانيا'] },
+    { flag: '🇮🇹', names: ['ايطاليا'] },
+    { flag: '🇪🇸', names: ['اسبانيا'] },
+    { flag: '🇧🇷', names: ['البرازيل'] },
+    { flag: '🇦🇷', names: ['الارجنتين'] },
+    { flag: '🇹🇷', names: ['تركيا'] },
+    { flag: '🇮🇳', names: ['الهند'] },
+    { flag: '🇷🇺', names: ['روسيا'] },
+    { flag: '🇨🇦', names: ['كندا'] },
+    { flag: '🇦🇺', names: ['استراليا'] },
+    { flag: '🇲🇽', names: ['المكسيك'] },
+    { flag: '🇵🇰', names: ['باكستان'] },
+    { flag: '🇮🇷', names: ['ايران'] },
+    { flag: '🇹🇭', names: ['تايلاند'] },
+    { flag: '🇳🇬', names: ['نيجيريا'] },
+    { flag: '🇿🇦', names: ['جنوب افريقيا'] },
+    { flag: '🇸🇪', names: ['السويد'] },
+    { flag: '🇳🇴', names: ['النرويج'] },
+    { flag: '🇵🇹', names: ['البرتغال'] },
+    { flag: '🇳🇱', names: ['هولندا'] },
+    { flag: '🇧🇪', names: ['بلجيكا'] },
+    { flag: '🇨🇭', names: ['سويسرا'] },
+    { flag: '🇵🇱', names: ['بولندا'] },
+    { flag: '🇬🇷', names: ['اليونان'] },
+    { flag: '🇮🇩', names: ['اندونيسيا'] },
+    { flag: '🇲🇾', names: ['ماليزيا'] },
+];
+
+const _flagNorm = s => s.trim()
+    .replace(/أ|إ|آ/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+    .replace(/\s+/g, '').toLowerCase();
+
+// ============================================================
 //  Command handlers
 // ============================================================
 
@@ -161,7 +221,29 @@ commands['.توقف'] = async (sock, msg, args, ctx) => {
         const type = session.type;
         const hasScores = session.scores && Object.keys(session.scores).length > 0;
 
-        if ((type === 'writing_continuous' || type === 'dismantling' || type === 'counting') && hasScores) {
+        if (type === 'writing_event') {
+            delete sessionsDb[chatId];
+            save(FILES.SESSIONS, sessionsDb);
+            if (hasScores) {
+                const sorted = Object.entries(session.scores).sort(([, a], [, b]) => b - a);
+                const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+                const top5 = sorted.slice(0, 5);
+                const cleanNum = (n) => n.replace(/[^0-9]/g, '');
+                const [winNum, winScore] = sorted[0];
+                addPoints(chatId, winNum, winScore * 2);
+                const groupName = (await sock.groupMetadata(chatId).catch(() => null))?.subject || chatId;
+                let resultText = `📊 *نتائج الحدث الصامت*\n*━━━━━━━━━━━━━━━━━━*\n📍 ${groupName}\n🏆 *النتائج:*\n`;
+                top5.forEach(([n, s], i) => {
+                    resultText += `${medals[i] || (i + 1) + '.'} ${cleanNum(n)} — *${s}* نقطة\n`;
+                });
+                resultText += `\n🏆 الفائز: ${cleanNum(winNum)} (+${winScore * 2} نقطة)\n*━━━━━━━━━━━━━━━━━━*`;
+                await sock.sendMessage(SUPER_OWNER + '@s.whatsapp.net', { text: resultText }).catch(() => {});
+            }
+            await sock.sendMessage(chatId, { text: '⏹️ تم إيقاف الحدث.' + (hasScores ? ' النتائج أُرسلت للمطور.' : '') });
+            return;
+        }
+
+        if ((type === 'writing_continuous' || type === 'dismantling' || type === 'counting' || type === 'flags') && hasScores) {
             const sorted = Object.entries(session.scores).sort(([, a], [, b]) => b - a);
             const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
             const top5 = sorted.slice(0, 5);
@@ -169,7 +251,7 @@ commands['.توقف'] = async (sock, msg, args, ctx) => {
             const mentions = top5.map(([n]) => cleanNum(n) + '@s.whatsapp.net');
             const [winNum, winScore] = sorted[0];
             addPoints(chatId, winNum, winScore * 2);
-            const typeLabel = type === 'dismantling' ? 'التفكيك' : type === 'counting' ? 'التعداد' : 'الكتابة';
+            const typeLabel = type === 'dismantling' ? 'التفكيك' : type === 'counting' ? 'التعداد' : type === 'flags' ? 'الأعلام' : 'الكتابة';
             let resultText = `⏹️ *انتهت فعالية ${typeLabel}!*\n*━━━━━━━━━━━━━━━━━━*\n🏆 *النتائج النهائية:*\n`;
             top5.forEach(([n, s], i) => {
                 resultText += `${medals[i] || (i + 1) + '.'} @${cleanNum(n)} — *${s}* نقطة\n`;
@@ -268,6 +350,42 @@ commands['.تخمين'] = async (sock, msg, args, ctx) => {
     await sock.sendMessage(chatId, {
         text: `🔢 *فعالية التخمين!*\n*━━━━━━━━━━━━━━━━━━*\nأنا أفكر في رقم بين *1* و *100*\nمن يخمّن الرقم الصحيح يفوز! 🏆\n*أرسل تخمينك الآن...*\n*━━━━━━━━━━━━━━━━━━*`
     });
+};
+
+// .اعلام — flag guessing game (10 rounds)
+commands['.اعلام'] = async (sock, msg, args, ctx) => {
+    const { chatId, isGroup } = ctx;
+    if (!isGroup) return;
+    if (sessionsDb[chatId]?.active) return sock.sendMessage(chatId, { text: "⚠️ يوجد فعالية نشطة." });
+
+    const shuffled = [...FLAGS_DATA].sort(() => Math.random() - 0.5).slice(0, 10);
+    sessionsDb[chatId] = {
+        active: true, type: 'flags', scores: {}, round: 0,
+        flags: shuffled, maxRounds: 10, answered: false
+    };
+    save(FILES.SESSIONS, sessionsDb);
+
+    await sock.sendMessage(chatId, {
+        text: `*🏳️ فعالية الأعلام!*\n*━━━━━━━━━━━━━━━━━━*\n10 أعلام — أول شخص يكتب اسم الدولة يفوز بنقطة!\n⏰ 15 ثانية لكل سؤال\n*━━━━━━━━━━━━━━━━━━*`
+    });
+    runFlagRound(sock, chatId);
+};
+
+// .حدث — silent writing event (no confirmation messages, results to developer)
+commands['.حدث'] = async (sock, msg, args, ctx) => {
+    const { chatId, isGroup } = ctx;
+    if (!isGroup) return;
+    if (sessionsDb[chatId]?.active) return sock.sendMessage(chatId, { text: "⚠️ يوجد فعالية نشطة." });
+
+    sessionsDb[chatId] = {
+        active: true, type: 'writing_event', scores: {}, round: 0, answered: false
+    };
+    save(FILES.SESSIONS, sessionsDb);
+
+    await sock.sendMessage(chatId, {
+        text: `*✒️ حدث الكتابة الصامت!*\n*━━━━━━━━━━━━━━━━━━*\nاكتب اسم الشخصية بشكل صحيح\n🔇 صامتة — بدون رسائل تأكيد\n📊 النتائج ترسل للمطور عند التوقف\n*━━━━━━━━━━━━━━━━━━*`
+    });
+    runWritingEventRound(sock, chatId);
 };
 
 // ============================================================
@@ -383,8 +501,101 @@ async function handleXOMove(sock, msg, text, chatId, senderJid) {
     return true;
 }
 
+// ============================================================
+//  Flag game helpers
+// ============================================================
+async function runFlagRound(sock, chatId) {
+    const session = sessionsDb[chatId];
+    if (!session || session.type !== 'flags') return;
+
+    if (session.round >= session.maxRounds) {
+        await endFlagGame(sock, chatId);
+        return;
+    }
+
+    const activeTimers = global._botTimers = global._botTimers || {};
+    const current = session.flags[session.round];
+    session.answer = current.names[0];
+    session.answered = false;
+    save(FILES.SESSIONS, sessionsDb);
+
+    await sock.sendMessage(chatId, {
+        text: `*🏳️ أعلام ⟦${session.round + 1}/${session.maxRounds}⟧*\n\n${current.flag}\n\n*ما هي هذه الدولة؟*`
+    });
+
+    activeTimers[chatId] = setTimeout(async () => {
+        if (!sessionsDb[chatId] || sessionsDb[chatId].type !== 'flags') return;
+        if (!sessionsDb[chatId].answered) {
+            await sock.sendMessage(chatId, { text: `⏰ انتهى الوقت! الإجابة: *${current.names[0]}*` });
+            sessionsDb[chatId].round++;
+            save(FILES.SESSIONS, sessionsDb);
+            await runFlagRound(sock, chatId);
+        }
+    }, 15000);
+}
+
+async function endFlagGame(sock, chatId) {
+    const session = sessionsDb[chatId];
+    if (!session) return;
+    const activeTimers = global._botTimers || {};
+    if (activeTimers[chatId]) { clearTimeout(activeTimers[chatId]); delete activeTimers[chatId]; }
+
+    const hasScores = session.scores && Object.keys(session.scores).length > 0;
+    if (hasScores) {
+        const sorted = Object.entries(session.scores).sort(([, a], [, b]) => b - a);
+        const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+        const top5 = sorted.slice(0, 5);
+        const cleanNum = (n) => n.replace(/[^0-9]/g, '');
+        const mentions = top5.map(([n]) => cleanNum(n) + '@s.whatsapp.net');
+        const [winNum, winScore] = sorted[0];
+        addPoints(chatId, winNum, winScore * 2);
+        let resultText = `🏁 *انتهت فعالية الأعلام!*\n*━━━━━━━━━━━━━━━━━━*\n🏆 *النتائج النهائية:*\n`;
+        top5.forEach(([n, s], i) => {
+            resultText += `${medals[i] || (i + 1) + '.'} @${cleanNum(n)} — *${s}* نقطة\n`;
+        });
+        resultText += `*━━━━━━━━━━━━━━━━━━*`;
+        delete sessionsDb[chatId];
+        save(FILES.SESSIONS, sessionsDb);
+        await sock.sendMessage(chatId, { text: resultText, mentions });
+
+        const groupName = (await sock.groupMetadata(chatId).catch(() => null))?.subject || chatId;
+        let report = `📊 *نقاط فعالية الأعلام*\n*━━━━━━━━━━━━━━━━━━*\n📍 الجروب: ${groupName}\n\n`;
+        top5.forEach(([n, s], i) => {
+            report += `${medals[i] || (i + 1) + '.'} ${cleanNum(n)} — *${s}* نقطة\n`;
+        });
+        report += `\n🏆 الفائز: ${cleanNum(winNum)} حصل على *${winScore * 2}* نقطة إضافية\n*━━━━━━━━━━━━━━━━━━*`;
+        if (logDb.groupId) {
+            await sock.sendMessage(logDb.groupId, { text: report }).catch(() => {});
+        } else {
+            await sock.sendMessage(SUPER_OWNER + '@s.whatsapp.net', { text: report }).catch(() => {});
+        }
+    } else {
+        delete sessionsDb[chatId];
+        save(FILES.SESSIONS, sessionsDb);
+        await sock.sendMessage(chatId, { text: '🏁 انتهت فعالية الأعلام بدون نتائج.' });
+    }
+}
+
+// ============================================================
+//  Writing event helper
+// ============================================================
+async function runWritingEventRound(sock, chatId) {
+    const session = sessionsDb[chatId];
+    if (!session || session.type !== 'writing_event') return;
+
+    const char = randChar();
+    session.round++;
+    session.answer = char;
+    session.answered = false;
+    save(FILES.SESSIONS, sessionsDb);
+    await sock.sendMessage(chatId, { text: `*⟦${char}⟧*` });
+}
+
 module.exports = {
     commands,
     handleSpeedSelect,
     handleXOMove,
+    runFlagRound,
+    runWritingEventRound,
+    FLAGS_DATA,
 };
