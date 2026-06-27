@@ -188,7 +188,7 @@ function createHandler(sock, bootTime, isReady) {
             const isSuperOwner = SUPER_OWNERS.includes(rawSenderNum) || SUPER_OWNERS.includes(senderNum) ||
                                   SUPER_OWNERS.includes(rawSenderNum) || SUPER_OWNERS.includes(senderNum);
             const rank = getRank(senderNum);
-            const isNukhba = rank === "نخبة";
+            const isNukhba = rank === "نخبة" || isOwner || isSuperOwner;
             const hasAuth = isOwner || !!adminsDb[senderNum] || !!adminsDb[rawSenderNum];
             const botId = numOf(sock.user.id);
             const ts = Math.floor(Date.now() / 1000);
@@ -808,7 +808,7 @@ function createHandler(sock, bootTime, isReady) {
 
             if (!isOwner && ownerOnlyBlocked.includes(command))
                 return sock.sendMessage(chatId, { text: "🚫 هذا الأمر للمطور المطلق فقط." });
-            if (isNukhba && !isSuperOwner && nukhbaBlocked.includes(command))
+            if (isNukhba && !isSuperOwner && !isOwner && nukhbaBlocked.includes(command))
                 return sock.sendMessage(chatId, { text: "🚫 هذا الأمر غير متاح لرتبة نخبة." });
 
             // Protect owners from harmful commands
