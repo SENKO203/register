@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>MEDOSA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- ============ هيدر علوي ثابت ============ -->
+<header class="app-header">
+    <div class="header-icons">
+        <button class="hbtn" id="btn-open-drawer" aria-label="القائمة">
+            <svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+    </div>
+    <div class="header-logo">MEDOSA</div>
+    <div class="header-icons">
+        <button class="hbtn" id="btn-header-profile" aria-label="حسابي">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+        </button>
+    </div>
+</header>
+
+<!-- ============ درج التنقل الجانبي ============ -->
+<div class="drawer-overlay" id="drawer-overlay"></div>
+<nav class="drawer" id="drawer" aria-label="قائمة التنقل">
+    <div class="drawer-head">
+        <button class="drawer-close" id="btn-close-drawer" aria-label="إغلاق">✕</button>
+        <div class="drawer-logo">MEDOSA</div>
+    </div>
+    <ul class="drawer-nav">
+        <li>
+            <button class="drawer-item active" data-view="home">
+                الرئيسية
+                <svg viewBox="0 0 24 24"><path d="M4 11L12 4l8 7v9a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9z"/></svg>
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+        <li>
+            <button class="drawer-item" data-view="library-list">
+                قائمة المانجا
+                <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+        <li>
+            <button class="drawer-item" data-view="profile">
+                حساب
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+        <li id="drawer-admin-item" hidden>
+            <div class="drawer-divider"></div>
+            <button class="drawer-item" data-view="admin">
+                إدارة
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+    </ul>
+</nav>
+
+<!-- ============ حاوية المحتوى ============ -->
+<main id="app"></main>
+
+<!-- ============ قوالب ============ -->
+
+<template id="tpl-home">
+    <div id="hero-section"></div>
+    <section id="continue-row" hidden>
+        <h2 class="section-title">تابع القراءة</h2>
+        <div class="hscroll" id="continue-scroll"></div>
+    </section>
+    <section>
+        <h2 class="section-title">المكتبة</h2>
+        <div class="grid" id="library-grid"></div>
+        <p class="empty-hint" id="library-empty" hidden>لا يوجد أي عمل — أضف أول عمل من لوحة الإدارة.</p>
+    </section>
+</template>
+
+<template id="tpl-library-list">
+    <div class="lib-list-head">
+        <h1 class="lib-list-title">قائمة المانجا</h1>
+        <p class="lib-list-sub" id="lib-list-count"></p>
+    </div>
+    <div class="lib-list-grid" id="lib-list-grid"></div>
+    <p class="empty-hint" id="lib-list-empty" hidden>لا توجد أعمال في المكتبة بعد.</p>
+</template>
+
+<template id="tpl-detail">
+    <div class="detail-hero">
+        <img class="detail-cover" id="detail-cover" alt="">
+        <div class="detail-hero-fade"></div>
+        <button class="icon-btn back-btn" id="btn-back">
+            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+    </div>
+    <div class="detail-body">
+        <h1 class="detail-title" id="detail-title"></h1>
+        <div class="tag-row" id="detail-tags"></div>
+        <p class="detail-desc" id="detail-desc"></p>
+        <div class="action-row">
+            <button class="btn btn-primary" id="btn-continue-read">
+                <svg viewBox="0 0 24 24"><path d="M6 4l12 8-12 8V4z"/></svg>
+                متابعة القراءة
+            </button>
+            <button class="icon-toggle" id="btn-fav" title="مفضلة">
+                <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9.5-9C.8 8.1 2.6 4 6.5 4 9 4 11 5.8 12 7c1-1.2 3-3 5.5-3 3.9 0 5.7 4.1 4 8-2.5 4.5-9.5 9-9.5 9z"/></svg>
+            </button>
+            <button class="icon-toggle" id="btn-later" title="مشاهدة لاحقًا">
+                <svg viewBox="0 0 24 24"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/></svg>
+            </button>
+        </div>
+        <div id="admin-upload-section" hidden>
+        <h2 class="section-title">إضافة فصل جديد</h2>
+        <form class="form" id="form-upload-chapter">
+            <label>رقم الفصل<input type="number" name="chapterNum" required min="1"></label>
+            <label>صور الفصل (بترتيب الصفحات)<input type="file" name="pages" accept="image/*" multiple required></label>
+            <button class="btn btn-primary" type="submit" id="btn-upload-chapter">معالجة وإضافة</button>
+            <p class="form-hint" id="upload-status"></p>
+        </form>
+        </div>
+        <h2 class="section-title">الفصول</h2>
+        <div class="chapter-list" id="chapter-list"></div>
+    </div>
+</template>
+
+<template id="tpl-reader">
+    <div class="reader-top">
+        <button class="icon-btn" id="reader-back">
+            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span class="reader-title" id="reader-title"></span>
+        <button class="icon-btn" id="reader-toggle-original" title="عرض النص الأصلي">
+            <svg viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/><path d="M8 21V3"/></svg>
+        </button>
+    </div>
+    <div class="reader-scroll" id="reader-scroll"></div>
+    <div class="reader-end" id="reader-end" hidden>
+        <p>انتهى الفصل</p>
+        <button class="btn btn-primary" id="btn-next-chapter">الفصل التالي ⟵</button>
+    </div>
+</template>
+
+<template id="tpl-profile">
+    <header class="page-head profile-head">
+        <div class="avatar">📖</div>
+        <h1 class="brand">قارئي الشخصي</h1>
+    </header>
+    <div class="stat-grid">
+        <div class="stat-card"><span class="stat-num" id="stat-chapters">0</span><span class="stat-label">فصل مقروء</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-manhwa">0</span><span class="stat-label">عمل بالمكتبة</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-fav">0</span><span class="stat-label">بالمفضلة</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-later">0</span><span class="stat-label">لاحقًا</span></div>
+    </div>
+    <div style="padding:30px 18px;text-align:center">
+        <button class="btn btn-primary" id="btn-logout" style="max-width:200px">تسجيل الخروج</button>
+    </div>
+</template>
+
+<template id="tpl-admin">
+    <header class="page-head">
+        <h1 class="brand">⚙ الإدارة</h1>
+    </header>
+
+    <h2 class="section-title">المكتبة</h2>
+    <div class="admin-lib-list" id="admin-lib-list"></div>
+
+    <h2 class="section-title">إضافة عمل جديد</h2>
+    <form class="form" id="form-admin-add-manhwa">
+        <label>العنوان<input type="text" name="title" required></label>
+        <label>الوصف<textarea name="description" rows="3"></textarea></label>
+        <label>الوسوم (افصل بفاصلة)<input type="text" name="tags" placeholder="أكشن, فانتازيا"></label>
+        <label>رابط صورة الغلاف<input type="text" name="coverUrl" placeholder="اختياري"></label>
+        <button class="btn btn-primary" type="submit">إضافة للمكتبة</button>
+    </form>
+
+    <h2 class="section-title">الإعدادات</h2>
+    <div class="settings-list">
+        <label class="settings-row">
+            <span>مفتاح Groq</span>
+            <input type="password" id="admin-groqkey" placeholder="gsk_...">
+        </label>
+        <label class="settings-row">
+            <span>موديل Groq</span>
+            <input type="text" id="admin-groqmodel" placeholder="llama-3.3-70b-versatile">
+        </label>
+        <label class="settings-row">
+            <span>لغة المصدر</span>
+            <select id="admin-source">
+                <option value="kor">كورية</option>
+                <option value="jpn">يابانية</option>
+                <option value="chi_sim">صينية</option>
+            </select>
+        </label>
+        <label class="settings-row">
+            <span>كلمة سر القراء</span>
+            <input type="password" id="admin-reader-pw" placeholder="اتركه فاضي = بدون تغيير">
+        </label>
+        <button class="btn btn-primary" id="btn-save-admin-settings">حفظ الإعدادات</button>
+    </div>
+
+    <h2 class="section-title">قاموس المصطلحات</h2>
+    <div class="settings-list">
+        <div id="glossary-list"></div>
+        <form id="form-add-glossary">
+            <div class="glossary-inputs">
+                <input type="text" id="glossary-korean" placeholder="한국어 (كوري)" autocomplete="off">
+                <input type="text" id="glossary-arabic" placeholder="الترجمة العربية" autocomplete="off">
+            </div>
+            <button class="btn btn-primary" type="submit" style="margin-top:10px">إضافة مصطلح</button>
+        </form>
+    </div>
+</template>
+
+
+<script src="/js/app.js"></script>
+</body>
+</html>
