@@ -18,7 +18,7 @@ function ensure(file, fallback) {
 }
 ensure(FILES.LIBRARY, {});
 ensure(FILES.PROGRESS, {});
-ensure(FILES.LISTS, { favorites: [], readLater: [] });
+ensure(FILES.LISTS, { favorites: [], currentlyReading: [], readLater: [], completed: [] });
 
 function load(file) {
     try { return JSON.parse(fs.readFileSync(file, 'utf-8')); }
@@ -70,7 +70,15 @@ function totalChaptersRead() {
 // ============================================================
 //   المفضلة / مشاهدة لاحقًا
 // ============================================================
-function getLists() { return load(FILES.LISTS); }
+function getLists() {
+    const raw = load(FILES.LISTS);
+    return {
+        favorites:        raw.favorites        || [],
+        currentlyReading: raw.currentlyReading || [],
+        readLater:        raw.readLater        || [],
+        completed:        raw.completed        || [],
+    };
+}
 function toggleList(listName, manhwaId) {
     const lists = getLists();
     if (!lists[listName]) lists[listName] = [];

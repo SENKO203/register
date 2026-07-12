@@ -1,16 +1,14 @@
 'use strict';
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
-const axios = require('axios');
-const sizeOf = require('image-size');
-const { createWorker } = require('tesseract.js');
-const db = require('./database');
+const https = require('https');
+const db   = require('./database');
 
 const CONFIG_PATH   = path.join(__dirname, 'config.json');
 const GLOSSARY_PATH = path.join(db.DATA_DIR, 'glossary.json');
-const MANGA_OCR_URL = 'http://127.0.0.1:5555';
 
 function getConfig() {
+    if (!fs.existsSync(CONFIG_PATH)) return {};
     return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
 }
 function getGlossary() {
@@ -19,146 +17,95 @@ function getGlossary() {
 }
 
 // ============================================================
-//   فحص Manga-OCR — مرة واحدة، محفوظ في الذاكرة
+//   أبعاد الصورة من الـ header — بدون أي مكتبة خارجية
 // ============================================================
-let _mangaOcrReady = null; // null = لم يُفحص بعد
-
-async function isMangaOcrAvailable() {
-    if (_mangaOcrReady !== null) return _mangaOcrReady;
-    try {
-        await axios.get(`${MANGA_OCR_URL}/health`, { timeout: 2500 });
-        _mangaOcrReady = true;
-        console.log('[OCR] Manga-OCR server متاح — سيتم استخدامه');
-    } catch {
-        _mangaOcrReady = false;
-        console.log('[OCR] Manga-OCR غير متاح — الرجوع إلى Tesseract');
+function getImageDimensions(filePath) {
+    const buf = fs.readFileSync(filePath);
+    // PNG
+    if (buf[0] === 0x89 && buf[1] === 0x50) {
+        return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
     }
-    return _mangaOcrReady;
-}
-
-// ============================================================
-//   أدوات نصية
-// ============================================================
-function cleanOcrText(text) {
-    return text.replace(/\r?\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
-}
-function hasKorean(text) {
-    return /[가-힣]/.test(text);
-}
-function applyGlossary(text, glossary) {
-    let result = text;
-    for (const [kor, ara] of Object.entries(glossary)) {
-        if (kor && ara) result = result.replaceAll(kor, ara);
-    }
-    return result;
-}
-
-// ============================================================
-//   استخراج مناطق النص من صورة
-//   Tesseract = يكشف المواضع (bbox)
-//   Manga-OCR = يقرأ النص بدقة أعلى بكثير
-// ============================================================
-async function extractTextRegions(imagePath, worker) {
-    const { data } = await worker.recognize(imagePath);
-
-    // نستخدم Tesseract فقط للكشف عن المواضع (confidence منخفض مقصود)
-    const candidates = (data.blocks || []).filter(b =>
-        (b.bbox.x1 - b.bbox.x0) > 15 &&
-        (b.bbox.y1 - b.bbox.y0) > 10 &&
-        b.confidence > 12
-    );
-
-    if (!candidates.length) return [];
-
-    // ---- مسار Manga-OCR ----
-    if (await isMangaOcrAvailable()) {
-        try {
-            const r = await axios.post(
-                `${MANGA_OCR_URL}/ocr`,
-                { imagePath, bboxes: candidates.map(b => b.bbox) },
-                { timeout: 120_000 }
-            );
-
-            return candidates
-                .map((b, i) => ({
-                    text: cleanOcrText(r.data.texts[i] || ''),
-                    bbox: b.bbox,
-                    confidence: 90,
-                }))
-                .filter(b => b.text.length > 1 && hasKorean(b.text));
-
-        } catch (e) {
-            console.warn('[OCR] Manga-OCR فشل، رجوع لـ Tesseract:', e.message);
-            _mangaOcrReady = false; // استخدام Tesseract لبقية الفصل
+    // JPEG: ابحث عن SOF marker
+    for (let i = 2; i < buf.length - 8; i++) {
+        if (buf[i] === 0xFF && [0xC0, 0xC1, 0xC2].includes(buf[i + 1])) {
+            return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
         }
     }
-
-    // ---- مسار Tesseract (fallback) ----
-    return (data.blocks || [])
-        .map(block => ({
-            text: cleanOcrText(block.text),
-            bbox: block.bbox,
-            confidence: block.confidence || 0,
-        }))
-        .filter(b => b.text.length > 1 && b.confidence > 25 && hasKorean(b.text));
+    return { width: 800, height: 1200 };
 }
 
 // ============================================================
-//   ترجمة مجموعة فقاعات دفعة واحدة
+//   Groq Vision — يقرأ الكوري + يترجم + يحدد المواضع في خطوة واحدة
 // ============================================================
-async function translateBlocks(blocks, targetLang, glossary) {
-    const { groqKey, groqModel } = getConfig();
-    if (!groqKey) throw new Error('مفتاح Groq غير مُعد — أضفه في الإعدادات');
-    if (!blocks.length) return [];
+async function callGroqVision(imagePath, glossary, config) {
+    const base64  = fs.readFileSync(imagePath).toString('base64');
+    const ext     = path.extname(imagePath).toLowerCase();
+    const mime    = { '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' }[ext] || 'image/jpeg';
+    const model   = (config.groqModel || '').includes('scout') || (config.groqModel || '').includes('maverick')
+        ? config.groqModel
+        : 'meta-llama/llama-4-scout-17b-16e-instruct';
 
-    const processed = blocks.map(b => ({
-        ...b,
-        textForTranslation: applyGlossary(b.text, glossary),
-    }));
+    const glossaryText = Object.entries(glossary)
+        .map(([k, v]) => `${k} → ${v}`).join('\n');
 
-    const numbered = processed.map((b, i) => `[${i}] ${b.textForTranslation}`).join('\n');
+    const prompt = `هذه صفحة من مانهوا (كوميكس) كورية.
+ابحث عن كل فقاعات الكلام والنصوص الكورية في الصورة.
+لكل نص أعطني موضعه كنسبة مئوية (0-100) من أبعاد الصورة بدقة، النص الكوري الأصلي، والترجمة العربية.
 
-    const prompt =
-`أنت مترجم محترف متخصص في مانهوا الويب تون الكورية إلى ${targetLang}.
+${glossaryText ? `قاموس مصطلحات (التزم بها):\n${glossaryText}\n` : ''}
+قواعد الترجمة:
+• عربية طبيعية تناسب أسلوب المانهوا وعمر الشخصيات
+• الصراخ والغضب الشديد → علامة !! في النهاية
+• الهمس والتفكير الداخلي → بين قوسين ()
+• أسماء الشخصيات الكورية → نقحرة عربية كما تُنطق
 
-قواعد الترجمة (التزم بها بدقة):
-• الترجمة طبيعية عامية تناسب شخصيات المانهوا — ليست حرفية جافة
-• الصراخ/الغضب → أحرف كبيرة أو !! في نهاية الجملة
-• الهمس/التفكير الداخلي → ... أو () حول النص
-• أصوات المؤثرات (بوم، كراش) → اكتب المعادل العربي أو اتركها إذا مألوفة
-• أسماء الأعلام الكورية → اكتبها بالنقحرة العربية كما تُنطق
-• لا تترجم الكلمات التي في قاموس المصطلحات (هي مترجمة مسبقاً)
-• أعد فقط السطور المرقّمة بالتنسيق [رقم] النص، بدون أي شرح
+أعد JSON فقط بهذا الشكل الدقيق وبدون أي نص آخر:
+{"blocks":[{"x":10,"y":5,"w":30,"h":8,"original":"النص الكوري","translated":"الترجمة العربية"}]}
 
-فقاعات الحوار في هذه الصفحة (مرتبة من أعلى لأسفل):
-${numbered}`;
+إذا لم يوجد نص كوري في الصورة أعد: {"blocks":[]}`;
 
-    const model = groqModel || 'llama-3.3-70b-versatile';
+    const body = JSON.stringify({
+        model,
+        messages: [{
+            role: 'user',
+            content: [
+                { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } },
+                { type: 'text', text: prompt },
+            ],
+        }],
+        temperature: 0.05,
+        max_tokens: 3000,
+        response_format: { type: 'json_object' },
+    });
 
-    const r = await axios.post(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-            model,
-            messages: [{ role: 'user', content: prompt }],
-            max_tokens: 2048,
-            temperature: 0.15,
-        },
-        {
-            headers: { Authorization: `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
-            timeout: 40_000,
-        }
-    );
-
-    const raw = r.data.choices?.[0]?.message?.content || '';
-    const translations = new Array(blocks.length).fill('');
-    for (const line of raw.split('\n')) {
-        const m = line.match(/^\[(\d+)\]\s*(.+)$/);
-        if (m) {
-            const idx = parseInt(m[1]);
-            if (idx >= 0 && idx < translations.length) translations[idx] = m[2].trim();
-        }
-    }
-    return translations;
+    return new Promise((resolve, reject) => {
+        const req = https.request({
+            hostname: 'api.groq.com',
+            path: '/openai/v1/chat/completions',
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${config.groqKey}`,
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(body),
+            },
+        }, res => {
+            let raw = '';
+            res.on('data', d => raw += d);
+            res.on('end', () => {
+                try {
+                    const json = JSON.parse(raw);
+                    if (json.error) return reject(new Error(json.error.message || 'Groq Vision error'));
+                    const text = json.choices?.[0]?.message?.content || '{}';
+                    const match = text.match(/\{[\s\S]*\}/);
+                    if (!match) return resolve({ blocks: [] });
+                    resolve(JSON.parse(match[0]));
+                } catch (e) { reject(e); }
+            });
+        });
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+    });
 }
 
 // ============================================================
@@ -167,53 +114,54 @@ ${numbered}`;
 async function processChapterImages(manhwaId, chapterNum, imagePaths, onProgress) {
     const config   = getConfig();
     const glossary = getGlossary();
-    const lang     = config.sourceLanguage || 'kor';
 
-    await isMangaOcrAvailable(); // فحص مبكر قبل بدء المعالجة
+    if (!config.groqKey) throw new Error('مفتاح Groq غير موجود — أضفه من لوحة الإدارة');
 
     const chapterDir = path.join(db.DATA_DIR, 'library', manhwaId, `chapter-${chapterNum}`);
     fs.mkdirSync(chapterDir, { recursive: true });
 
-    const worker = await createWorker(lang);
-    const pages  = [];
+    const pages = [];
 
-    try {
-        for (let i = 0; i < imagePaths.length; i++) {
-            const imgPath = imagePaths[i];
-            const pageNum = i + 1;
+    for (let i = 0; i < imagePaths.length; i++) {
+        const imgPath = imagePaths[i];
+        const pageNum = i + 1;
 
-            if (onProgress) onProgress({ page: pageNum, total: imagePaths.length, stage: 'ocr' });
+        if (onProgress) onProgress({ page: pageNum, total: imagePaths.length, stage: 'vision' });
 
-            const dims   = sizeOf(imgPath);
-            const blocks = await extractTextRegions(imgPath, worker);
+        const { width, height } = getImageDimensions(imgPath);
 
-            if (onProgress) onProgress({ page: pageNum, total: imagePaths.length, stage: 'translate' });
+        let visionResult;
+        try {
+            visionResult = await callGroqVision(imgPath, glossary, config);
+        } catch (e) {
+            console.error(`[ص${pageNum}] خطأ في Vision:`, e.message);
+            visionResult = { blocks: [] };
+        }
 
-            let translations = [];
-            if (blocks.length > 0) {
-                try {
-                    translations = await translateBlocks(blocks, config.targetLanguage || 'العربية', glossary);
-                } catch (e) {
-                    console.error(`[ص${pageNum}] خطأ في الترجمة:`, e.message);
-                    translations = new Array(blocks.length).fill('');
-                }
-            }
-
-            const pageData = blocks.map((b, idx) => ({
-                bbox:       b.bbox,
-                original:   b.text,
-                translated: translations[idx] || '',
+        // تحويل النسب المئوية إلى بكسل
+        const textBlocks = (visionResult.blocks || [])
+            .filter(b => b.original && b.original.trim())
+            .map(b => ({
+                bbox: {
+                    x0: Math.round(Math.max(0, b.x / 100) * width),
+                    y0: Math.round(Math.max(0, b.y / 100) * height),
+                    x1: Math.round(Math.min(100, (b.x + b.w) / 100) * width),
+                    y1: Math.round(Math.min(100, (b.y + b.h) / 100) * height),
+                },
+                original:   b.original.trim(),
+                translated: (b.translated || '').trim(),
             }));
 
-            const outPath = path.join(chapterDir, `page-${pageNum}.json`);
-            fs.writeFileSync(outPath, JSON.stringify(pageData, null, 2));
-            pages.push({ page: pageNum, textBlocks: pageData.length, width: dims.width, height: dims.height });
-        }
-    } finally {
-        await worker.terminate();
+        // حفظ JSON احتياطي للصفحة
+        fs.writeFileSync(
+            path.join(chapterDir, `page-${pageNum}.json`),
+            JSON.stringify(textBlocks, null, 2)
+        );
+
+        pages.push({ page: pageNum, width, height, textBlocks });
     }
 
     return { manhwaId, chapterNum, pagesProcessed: pages.length, pages };
 }
 
-module.exports = { extractTextRegions, translateBlocks, processChapterImages, getGlossary };
+module.exports = { processChapterImages, getGlossary };

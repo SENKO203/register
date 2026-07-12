@@ -86,13 +86,10 @@ svg {
     opacity: .5;
 }
 .header-logo {
-    font-size: 22px; font-weight: 900; letter-spacing: 3px;
-    background: linear-gradient(90deg,
-        var(--gold-bright), var(--gold), #A07030, var(--gold), var(--gold-bright));
-    background-size: 200% auto;
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    animation: goldShimmer 5s linear infinite;
+    font-size: 22px; font-weight: 900; letter-spacing: 4px;
+    color: #ffffff;
     user-select: none;
+    text-shadow: 0 0 30px rgba(255,255,255,.15);
 }
 .header-icons { display: flex; gap: 2px; align-items: center; }
 .hbtn {
@@ -136,11 +133,8 @@ svg {
     min-height: var(--header-h);
 }
 .drawer-logo {
-    font-size: 18px; font-weight: 900; letter-spacing: 2px;
-    background: linear-gradient(90deg, var(--gold-bright), var(--gold), var(--gold-bright));
-    background-size: 200% auto;
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    animation: goldShimmer 4s linear infinite;
+    font-size: 18px; font-weight: 900; letter-spacing: 3px;
+    color: #ffffff;
 }
 .drawer-close {
     background: none; border: none; color: var(--text-muted);
@@ -182,6 +176,11 @@ svg {
     height: 1px;
     background: rgba(201,168,76,.1);
     margin: 8px 18px;
+}
+.drawer-section-label {
+    font-size: 11px; font-weight: 700; color: var(--text-muted);
+    letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 8px 22px 4px;
 }
 
 /* ===================== Hero البانر ===================== */
@@ -515,6 +514,49 @@ svg {
 .glossary-inputs input:first-child { direction: ltr; }
 .glossary-inputs input:focus { outline: none; box-shadow: 0 0 0 1.5px var(--gold); }
 
+/* ===================== MangaDex Search ===================== */
+.mdx-search-wrap { padding: 0 18px 16px; }
+.mdx-search-row {
+    display: flex; gap: 10px; margin-bottom: 12px;
+}
+.mdx-search-row input {
+    flex: 1; background: var(--surface); border: 1px solid rgba(201,168,76,.2);
+    color: var(--text); padding: 12px 14px; border-radius: 10px;
+    font-family: inherit; font-size: 14px; transition: border-color .2s;
+}
+.mdx-search-row input:focus { outline: none; border-color: var(--gold); }
+
+#mdx-results { display: flex; flex-direction: column; gap: 10px; }
+
+.mdx-card {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--surface); border-radius: var(--radius);
+    padding: 12px; border: 1px solid rgba(201,168,76,.12);
+    transition: border-color .2s;
+}
+.mdx-card:hover { border-color: rgba(201,168,76,.35); }
+.mdx-cover {
+    width: 58px; height: 82px; object-fit: cover;
+    border-radius: 8px; flex-shrink: 0;
+    box-shadow: 0 3px 12px rgba(0,0,0,.4);
+}
+.mdx-info { flex: 1; min-width: 0; }
+.mdx-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.mdx-status { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+.mdx-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+.mdx-tags .tag-chip { font-size: 10px; padding: 2px 9px; }
+
+/* زر تحميل فصل MangaDex */
+.btn-mdx-dl {
+    background: var(--gold-dim); color: var(--gold);
+    border: 1px solid rgba(201,168,76,.4);
+    border-radius: 8px; padding: 5px 13px;
+    font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+    transition: background .2s; white-space: nowrap;
+}
+.btn-mdx-dl:hover { background: rgba(201,168,76,.2); }
+.btn-mdx-dl:disabled { opacity: .6; cursor: default; }
+
 /* ===================== قائمة المانجا (list view) ===================== */
 .lib-list-head {
     padding: 24px 18px 16px;
@@ -595,3 +637,130 @@ svg {
     transition: background .2s;
 }
 .btn-danger:hover { background: rgba(200,50,50,.28); }
+
+/* ===================== مكتبتي (قوائم القراءة) ===================== */
+.my-lib-tabs-wrap {
+    padding: 16px 18px 0;
+    position: sticky; top: var(--header-h); z-index: 10;
+    background: var(--bg);
+    border-bottom: 1px solid rgba(201,168,76,.1);
+}
+.my-lib-tabs {
+    display: flex; gap: 6px;
+    overflow-x: auto; scrollbar-width: none;
+    padding-bottom: 0;
+}
+.my-lib-tabs::-webkit-scrollbar { display: none; }
+.my-lib-tab {
+    flex-shrink: 0; padding: 9px 16px;
+    border-radius: 10px 10px 0 0;
+    background: transparent; border: none;
+    color: var(--text-muted); font-family: inherit; font-size: 13px; font-weight: 700;
+    cursor: pointer; transition: all .2s;
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+}
+.my-lib-tab.active {
+    color: var(--gold);
+    border-bottom-color: var(--gold);
+    background: rgba(201,168,76,.07);
+}
+.my-lib-tab:hover:not(.active) { color: var(--text); }
+
+/* ===================== بوتوم شيت (أضف للمكتبة) ===================== */
+.sheet-overlay {
+    position: fixed; inset: 0; z-index: 300;
+    background: rgba(0,0,0,.65);
+    display: flex; align-items: flex-end;
+    animation: fadeIn .2s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.bottom-sheet {
+    width: 100%; background: var(--surface);
+    border-radius: 22px 22px 0 0;
+    padding: 0 0 32px;
+    box-shadow: 0 -8px 40px rgba(0,0,0,.6);
+    transform: translateY(100%);
+    transition: transform .32s cubic-bezier(.4,0,.2,1);
+}
+.bottom-sheet.open { transform: translateY(0); }
+.sheet-handle {
+    width: 42px; height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,.15);
+    margin: 12px auto 16px;
+}
+.sheet-title {
+    font-size: 15px; font-weight: 700;
+    padding: 0 22px 14px;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    color: var(--text-muted);
+}
+.sheet-option {
+    display: flex; align-items: center; gap: 14px;
+    width: 100%; padding: 16px 22px;
+    background: none; border: none; border-bottom: 1px solid rgba(255,255,255,.04);
+    color: var(--text); font-family: inherit; font-size: 15px; font-weight: 600;
+    cursor: pointer; text-align: right;
+    transition: background .15s;
+}
+.sheet-option:hover { background: rgba(255,255,255,.04); }
+.sheet-option.active { color: var(--gold); }
+.sheet-option-icon { font-size: 20px; flex-shrink: 0; }
+.sheet-option-label { flex: 1; }
+.sheet-check {
+    color: var(--gold); font-size: 17px; font-weight: 900;
+    min-width: 20px; text-align: center;
+}
+
+/* ===================== تسجيل الدخول (overlay) ===================== */
+.login-overlay {
+    position: fixed; inset: 0; z-index: 500;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+    animation: fadeIn .2s ease;
+}
+.login-box {
+    width: 100%; max-width: 340px;
+    display: flex; flex-direction: column; gap: 16px;
+    align-items: stretch;
+}
+.login-logo {
+    font-size: 32px; font-weight: 900; letter-spacing: 6px;
+    color: #ffffff; text-align: center; margin-bottom: 12px;
+}
+.login-hint { color: var(--text-muted); font-size: 14px; text-align: center; }
+.login-input {
+    background: var(--surface); border: 1px solid rgba(201,168,76,.25);
+    color: var(--text); padding: 15px 16px; border-radius: 12px;
+    font-family: inherit; font-size: 15px; text-align: center;
+    transition: border-color .2s;
+}
+.login-input:focus { outline: none; border-color: var(--gold); }
+.login-btn { width: 100%; }
+.login-error {
+    color: #e05060; font-size: 13px; text-align: center;
+    background: rgba(200,50,50,.1); border-radius: 8px; padding: 10px;
+}
+
+/* ===================== الملف الشخصي (أزرار) ===================== */
+.profile-actions {
+    padding: 24px 18px 30px;
+    display: flex; flex-direction: column; gap: 12px; align-items: center;
+}
+.profile-actions .btn { max-width: 220px; width: 100%; }
+.btn-admin-toggle {
+    border: none; border-radius: 12px; padding: 13px 20px;
+    font-family: inherit; font-weight: 700; font-size: 14px; cursor: pointer;
+    background: rgba(201,168,76,.1);
+    color: var(--gold);
+    border: 1px solid rgba(201,168,76,.3);
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background .2s;
+}
+.btn-admin-toggle:hover { background: rgba(201,168,76,.2); }
+
+/* الرئيسية: تلميح فارغ */
+.home-empty-hint {
+    padding: 60px 18px; text-align: center; color: var(--text-muted);
+}

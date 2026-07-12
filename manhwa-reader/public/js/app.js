@@ -10,6 +10,10 @@ async function api(path, opts = {}) {
         headers: { 'Content-Type': 'application/json' },
         ...opts,
     });
+    if (res.status === 401) {
+        showLoginOverlay();
+        throw new Error('يحتاج تسجيل دخول');
+    }
     if (!res.ok) throw new Error((await res.json()).error || 'خطأ غير متوقع');
     return res.json();
 }
@@ -26,6 +30,55 @@ function placeholderCover() {
             <text x="100" y="160" font-size="48" text-anchor="middle" fill="#C9A84C" opacity=".4">📖</text>
         </svg>`
     );
+}
+
+// ============================================================
+//   نافذة تسجيل الدخول
+// ============================================================
+function showLoginOverlay(isAdminMode = false) {
+    if (document.getElementById('login-overlay')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'login-overlay';
+    overlay.className = 'login-overlay';
+    overlay.innerHTML = `
+        <div class="login-box">
+            <div class="login-logo">MEDOSA</div>
+            <p class="login-hint">${isAdminMode ? 'كلمة مرور المدير' : 'أدخل كلمة المرور للدخول'}</p>
+            <input type="password" class="login-input" id="login-pw" placeholder="كلمة المرور" autocomplete="current-password">
+            <button class="btn btn-primary login-btn" id="login-submit">${isAdminMode ? 'دخول كمدير' : 'دخول'}</button>
+            <p class="login-error" id="login-error" style="display:none"></p>
+        </div>
+    `;
+    const doLogin = async () => {
+        const pw = document.getElementById('login-pw').value;
+        const errEl = document.getElementById('login-error');
+        const btn = document.getElementById('login-submit');
+        btn.disabled = true; errEl.style.display = 'none';
+        try {
+            const r = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pw }),
+            });
+            const result = await r.json();
+            if (result.error) throw new Error(result.error);
+            overlay.remove();
+            isAdmin = result.isAdmin;
+            const adminItem = document.getElementById('drawer-admin-item');
+            if (adminItem) adminItem.hidden = !isAdmin;
+            if (isAdminMode && result.isAdmin) navigate('admin');
+            else if (!location.hash) navigate('home');
+            else routeFromHash();
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+            btn.disabled = false;
+        }
+    };
+    overlay.querySelector('#login-submit').onclick = doLogin;
+    overlay.querySelector('#login-pw').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.querySelector('#login-pw')?.focus(), 150);
 }
 
 // ============================================================
@@ -46,17 +99,23 @@ function closeDrawer() {
 document.getElementById('btn-open-drawer').onclick  = openDrawer;
 document.getElementById('btn-close-drawer').onclick = closeDrawer;
 drawerOver.onclick = closeDrawer;
+document.getElementById('btn-header-profile').onclick = () => { closeDrawer(); navigate('profile'); };
 
-document.getElementById('btn-header-profile').onclick = () => navigate('profile');
-
-// ربط عناصر الدرج بالتنقل
 document.querySelectorAll('.drawer-item').forEach(btn => {
-    btn.onclick = () => { closeDrawer(); navigate(btn.dataset.view); };
+    btn.onclick = () => {
+        closeDrawer();
+        const view = btn.dataset.view;
+        const list = btn.dataset.list;
+        if (list) navigate(view, { id: list });
+        else navigate(view);
+    };
 });
 
-function setActiveDrawer(view) {
+function setActiveDrawer(view, listName) {
     document.querySelectorAll('.drawer-item').forEach(b => {
-        b.classList.toggle('active', b.dataset.view === view);
+        const viewMatch = b.dataset.view === view;
+        const listMatch = !listName || !b.dataset.list || b.dataset.list === listName;
+        b.classList.toggle('active', viewMatch && listMatch);
     });
 }
 
@@ -72,11 +131,11 @@ function pageTransition() {
 // ============================================================
 //   التنقل
 // ============================================================
-const topViews = ['home', 'library-list', 'profile', 'admin'];
+const topViews = ['home', 'library-list', 'my-library', 'profile', 'admin'];
 
 async function navigate(view, params = {}) {
-    if (topViews.includes(view)) setActiveDrawer(view);
-    location.hash = view + (params.id ? `/${params.id}` : '') + (params.chapter ? `/${params.chapter}` : '');
+    const hash = view + (params.id ? `/${params.id}` : '') + (params.chapter ? `/${params.chapter}` : '');
+    location.hash = hash;
     await render(view, params);
     window.scrollTo(0, 0);
 }
@@ -86,6 +145,7 @@ async function render(view, params) {
     pageTransition();
     if (view === 'home')         return renderHome();
     if (view === 'library-list') return renderLibraryList();
+    if (view === 'my-library')   return renderMyLibrary(params.id || 'favorites');
     if (view === 'profile')      return renderProfile();
     if (view === 'admin')        return renderAdmin();
     if (view === 'detail')       return renderDetail(params.id);
@@ -93,24 +153,16 @@ async function render(view, params) {
 }
 
 // ============================================================
-//   الرئيسية — مع بانر Hero
+//   الرئيسية — Hero + تابع القراءة فقط
 // ============================================================
 async function renderHome() {
+    setActiveDrawer('home');
     app.appendChild(tpl('home'));
-
-    const grid = document.getElementById('library-grid');
-    for (let i = 0; i < 6; i++) {
-        const s = document.createElement('div');
-        s.className = 'skeleton skeleton-card';
-        grid.appendChild(s);
-    }
 
     const [library, allProgress] = await Promise.all([
         api('/library'),
         api('/progress-all'),
     ]);
-
-    grid.innerHTML = '';
 
     // بانر Hero — أول عمل بالمكتبة
     const heroSection = document.getElementById('hero-section');
@@ -122,7 +174,7 @@ async function renderHome() {
             <img class="hero-bg" src="${featured.coverUrl || placeholderCover()}" alt="${escapeHtml(featured.title)}">
             <div class="hero-overlay"></div>
             <div class="hero-content">
-                <div class="hero-tags">${(featured.tags || []).map(t => `<span class="hero-tag">${escapeHtml(t)}</span>`).join('')}</div>
+                <div class="hero-tags">${(featured.tags || []).slice(0,3).map(t => `<span class="hero-tag">${escapeHtml(t)}</span>`).join('')}</div>
                 <div class="hero-title">${escapeHtml(featured.title)}</div>
                 <button class="hero-btn" id="hero-read-btn">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4l12 8-12 8V4z"/></svg>
@@ -132,29 +184,23 @@ async function renderHome() {
         `;
         hero.querySelector('#hero-read-btn').onclick = () => navigate('detail', { id: featured.id });
         heroSection.appendChild(hero);
+    } else {
+        document.getElementById('home-empty').hidden = false;
+        return;
     }
 
     // تابع القراءة
-    const inProgressIds = new Set();
     const inProgress = library.filter(m => allProgress[m.id]?.lastReadChapter);
     if (inProgress.length) {
         document.getElementById('continue-row').hidden = false;
         const scroll = document.getElementById('continue-scroll');
+        const seen = new Set();
         inProgress.forEach(m => {
-            if (inProgressIds.has(m.id)) return;
-            inProgressIds.add(m.id);
+            if (seen.has(m.id)) return;
+            seen.add(m.id);
             scroll.appendChild(buildCard(m, allProgress[m.id]));
         });
     }
-
-    // المكتبة الكاملة
-    const seenIds = new Set();
-    document.getElementById('library-empty').hidden = library.length > 0;
-    library.forEach(m => {
-        if (seenIds.has(m.id)) return;
-        seenIds.add(m.id);
-        grid.appendChild(buildCard(m, allProgress[m.id]));
-    });
 }
 
 function buildCard(m, progress) {
@@ -172,9 +218,10 @@ function buildCard(m, progress) {
 }
 
 // ============================================================
-//   قائمة المانجا (عرض قائمة كامل)
+//   قائمة المانجا (كل الأعمال)
 // ============================================================
 async function renderLibraryList() {
+    setActiveDrawer('library-list');
     app.appendChild(tpl('library-list'));
 
     const [library, allProgress] = await Promise.all([
@@ -204,7 +251,7 @@ async function renderLibraryList() {
             <img class="list-card-cover" src="${m.coverUrl || placeholderCover()}" alt="${escapeHtml(m.title)}" loading="lazy">
             <div class="list-card-body">
                 <div class="list-card-title">${escapeHtml(m.title)}</div>
-                <div class="list-card-tags">${(m.tags || []).map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>
+                <div class="list-card-tags">${(m.tags || []).slice(0,3).map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>
                 <div class="list-card-meta">
                     <span>${total} فصل</span>
                     ${readCount ? `<span class="list-card-read">${readCount} مقروء</span>` : ''}
@@ -219,19 +266,207 @@ async function renderLibraryList() {
 }
 
 // ============================================================
+//   مكتبتي (قوائم القراءة الشخصية)
+// ============================================================
+const LIST_META = {
+    favorites:        { label: '♥ مفضلة',       empty: 'لم تضف أي عمل للمفضلة بعد.' },
+    currentlyReading: { label: '📖 أقرأها الآن', empty: 'لا توجد أعمال جاري قراءتها.' },
+    readLater:        { label: '🔖 قراءة لاحقاً', empty: 'لا توجد أعمال في قائمة القراءة لاحقاً.' },
+    completed:        { label: '✓ مقروءة',         empty: 'لم تُكمل أي عمل بعد.' },
+};
+
+async function renderMyLibrary(listName = 'favorites') {
+    setActiveDrawer('my-library', listName);
+    app.appendChild(tpl('my-library'));
+
+    // تفعيل التاب الصحيح
+    const tabs = document.querySelectorAll('.my-lib-tab');
+    tabs.forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.list === listName);
+        tab.onclick = () => {
+            if (tab.dataset.list === listName) return;
+            navigate('my-library', { id: tab.dataset.list });
+        };
+    });
+
+    const [lists, library, allProgress] = await Promise.all([
+        api('/lists'),
+        api('/library'),
+        api('/progress-all'),
+    ]);
+
+    const ids = lists[listName] || [];
+    const libMap = Object.fromEntries(library.map(m => [m.id, m]));
+    const grid   = document.getElementById('my-lib-grid');
+    const empty  = document.getElementById('my-lib-empty');
+
+    const items = ids.map(id => libMap[id]).filter(Boolean);
+    empty.hidden = items.length > 0;
+    if (!items.length) {
+        empty.textContent = LIST_META[listName]?.empty || 'لا توجد أعمال.';
+        return;
+    }
+
+    items.forEach(m => {
+        const progress  = allProgress[m.id];
+        const readCount = progress?.readChapters?.length || 0;
+        const total     = m.chapters?.length || 0;
+        const pct       = total ? Math.round((readCount / total) * 100) : 0;
+
+        const row = document.createElement('div');
+        row.className = 'list-card';
+        row.innerHTML = `
+            <img class="list-card-cover" src="${m.coverUrl || placeholderCover()}" alt="${escapeHtml(m.title)}" loading="lazy">
+            <div class="list-card-body">
+                <div class="list-card-title">${escapeHtml(m.title)}</div>
+                <div class="list-card-tags">${(m.tags || []).slice(0,3).map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>
+                <div class="list-card-meta">
+                    <span>${total} فصل</span>
+                    ${readCount ? `<span class="list-card-read">${readCount} مقروء</span>` : ''}
+                </div>
+                ${total ? `<div class="list-card-bar"><div class="list-card-fill" style="width:${pct}%"></div></div>` : ''}
+            </div>
+            <svg class="list-card-arrow" viewBox="0 0 24 24"><path d="M9 6l-6 6 6 6"/></svg>
+        `;
+        row.onclick = () => navigate('detail', { id: m.id });
+        grid.appendChild(row);
+    });
+}
+
+// ============================================================
+//   بوتوم شيت — أضف للمكتبة
+// ============================================================
+function showAddToListSheet(manhwaId, lists) {
+    const OPTS = [
+        { key: 'favorites',        icon: '♥', label: 'مفضلة' },
+        { key: 'currentlyReading', icon: '📖', label: 'أقرأها الآن' },
+        { key: 'readLater',        icon: '🔖', label: 'قراءة لاحقاً' },
+        { key: 'completed',        icon: '✓', label: 'مقروءة' },
+    ];
+
+    const overlay = document.createElement('div');
+    overlay.className = 'sheet-overlay';
+
+    const sheet = document.createElement('div');
+    sheet.className = 'bottom-sheet';
+    sheet.innerHTML = `
+        <div class="sheet-handle"></div>
+        <div class="sheet-title">أضف للمكتبة</div>
+        ${OPTS.map(o => {
+            const active = (lists[o.key] || []).includes(manhwaId);
+            return `<button class="sheet-option${active ? ' active' : ''}" data-list="${o.key}">
+                <span class="sheet-option-icon">${o.icon}</span>
+                <span class="sheet-option-label">${o.label}</span>
+                <span class="sheet-check">${active ? '✓' : ''}</span>
+            </button>`;
+        }).join('')}
+    `;
+
+    sheet.querySelectorAll('.sheet-option').forEach(btn => {
+        btn.onclick = async () => {
+            const listName = btn.dataset.list;
+            try {
+                await api(`/lists/${listName}/toggle/${manhwaId}`, { method: 'POST' });
+                btn.classList.toggle('active');
+                btn.querySelector('.sheet-check').textContent = btn.classList.contains('active') ? '✓' : '';
+            } catch (e) { /* ignore */ }
+        };
+    });
+
+    overlay.appendChild(sheet);
+    document.body.appendChild(overlay);
+    overlay.onclick = e => { if (e.target === overlay) { sheet.classList.remove('open'); setTimeout(() => overlay.remove(), 320); } };
+    requestAnimationFrame(() => sheet.classList.add('open'));
+}
+
+// ============================================================
 //   صفحة التفاصيل
 // ============================================================
 async function renderDetail(id) {
-    const m = await api('/manhwa/' + id);
-    const lists = await api('/lists');
+    const [m, lists] = await Promise.all([
+        api('/manhwa/' + id),
+        api('/lists'),
+    ]);
     app.appendChild(tpl('detail'));
 
     document.getElementById('detail-cover').src = m.coverUrl || placeholderCover();
     document.getElementById('detail-title').textContent = m.title;
     document.getElementById('detail-desc').textContent = m.description || '';
     document.getElementById('btn-back').onclick = () => history.back();
+
     const uploadSection = document.getElementById('admin-upload-section');
     if (uploadSection) uploadSection.hidden = !isAdmin;
+
+    // زر أضف للمكتبة
+    document.getElementById('btn-add-list').onclick = () => showAddToListSheet(id, lists);
+
+    // MangaDex — فصول تلقائية
+    if (isAdmin && m.mdxId) {
+        const mdxSection = document.getElementById('mdx-chapter-section');
+        if (mdxSection) {
+            mdxSection.hidden = false;
+            const mdxList = document.getElementById('mdx-chapter-list');
+            mdxList.innerHTML = '<div class="loader"><div class="loader-ring"></div><p class="loader-text">جاري جلب الفصول من MangaDex...</p></div>';
+            try {
+                const mdxChapters = await api(`/mangadex/${m.mdxId}/chapters`);
+                mdxList.innerHTML = '';
+                const existingNums = new Set((m.chapters || []).map(c => String(c.num)));
+                if (!mdxChapters.length) {
+                    mdxList.innerHTML = '<p class="empty-hint">لا توجد فصول على MangaDex.</p>';
+                } else {
+                    mdxChapters.forEach(ch => {
+                        const downloaded = existingNums.has(String(ch.num));
+                        const row = document.createElement('div');
+                        row.className = 'chapter-row';
+                        row.innerHTML = `
+                            <span class="chapter-num">فصل ${ch.num}${ch.title ? ' — ' + escapeHtml(ch.title) : ''}</span>
+                            <div style="display:flex;align-items:center;gap:10px">
+                                <span style="font-size:11px;color:var(--text-muted)">${ch.pages} صفحة</span>
+                                ${downloaded
+                                    ? '<span style="color:var(--gold);font-size:13px">✓ محمّل</span>'
+                                    : `<button class="btn-mdx-dl" data-cid="${ch.id}" data-num="${ch.num}">تحميل ✦ ترجمة</button>`}
+                            </div>
+                        `;
+                        if (!downloaded) {
+                            const btn = row.querySelector('.btn-mdx-dl');
+                            btn.onclick = async () => {
+                                btn.disabled = true;
+                                btn.textContent = 'جاري التحميل...';
+                                try {
+                                    const { jobKey } = await api('/mangadex/download-chapter', {
+                                        method: 'POST',
+                                        body: JSON.stringify({ manhwaId: id, chapterId: ch.id, chapterNum: ch.num }),
+                                    });
+                                    while (true) {
+                                        await new Promise(r => setTimeout(r, 2000));
+                                        const job = await fetch(`/api/job/${jobKey}`).then(r => r.json());
+                                        if (job.status === 'done') {
+                                            btn.textContent = '✓ تمت الترجمة';
+                                            btn.style.color = 'var(--gold)';
+                                            existingNums.add(String(ch.num));
+                                            break;
+                                        } else if (job.status === 'error') {
+                                            throw new Error(job.error);
+                                        } else if (job.progress) {
+                                            const { page, total, stage } = job.progress;
+                                            btn.textContent = `${stage === 'download' ? 'تحميل' : 'ترجمة'} ${page}/${total}...`;
+                                        }
+                                    }
+                                } catch (err) {
+                                    btn.textContent = '❌ ' + err.message;
+                                    btn.disabled = false;
+                                }
+                            };
+                        }
+                        mdxList.appendChild(row);
+                    });
+                }
+            } catch (e) {
+                document.getElementById('mdx-chapter-list').innerHTML =
+                    `<p class="empty-hint">خطأ في MangaDex: ${escapeHtml(e.message)}</p>`;
+            }
+        }
+    }
 
     const tagsEl = document.getElementById('detail-tags');
     (m.tags || []).forEach(t => {
@@ -239,13 +474,6 @@ async function renderDetail(id) {
         chip.className = 'tag-chip'; chip.textContent = t;
         tagsEl.appendChild(chip);
     });
-
-    const favBtn   = document.getElementById('btn-fav');
-    const laterBtn = document.getElementById('btn-later');
-    favBtn.classList.toggle('active', lists.favorites.includes(id));
-    laterBtn.classList.toggle('active', lists.readLater.includes(id));
-    favBtn.onclick   = async () => { await api(`/lists/favorites/toggle/${id}`, { method: 'POST' }); favBtn.classList.toggle('active'); };
-    laterBtn.onclick = async () => { await api(`/lists/readLater/toggle/${id}`, { method: 'POST' }); laterBtn.classList.toggle('active'); };
 
     const chapters = m.chapters || [];
     const chapterList = document.getElementById('chapter-list');
@@ -298,8 +526,7 @@ async function renderDetail(id) {
                     throw new Error(job.error || 'فشلت المعالجة');
                 } else if (job.progress) {
                     const { page, total, stage } = job.progress;
-                    const stageLabel = stage === 'ocr' ? 'استخراج النص' : 'ترجمة';
-                    status.textContent = `صفحة ${page}/${total} — ${stageLabel}...`;
+                    status.textContent = `صفحة ${page}/${total} — ${stage === 'ocr' ? 'استخراج' : 'ترجمة'}...`;
                 }
             }
         } catch (err) {
@@ -397,23 +624,89 @@ function normalizedBbox(bbox, w, h) {
 //   الملف الشخصي
 // ============================================================
 async function renderProfile() {
+    setActiveDrawer('profile');
     app.appendChild(tpl('profile'));
     const stats = await api('/profile');
-    document.getElementById('stat-chapters').textContent = stats.totalChaptersRead;
-    document.getElementById('stat-manhwa').textContent   = stats.totalManhwa;
-    document.getElementById('stat-fav').textContent      = stats.favoritesCount;
-    document.getElementById('stat-later').textContent    = stats.readLaterCount;
+    document.getElementById('stat-chapters').textContent  = stats.totalChaptersRead;
+    document.getElementById('stat-manhwa').textContent    = stats.totalManhwa;
+    document.getElementById('stat-fav').textContent       = stats.favoritesCount;
+    document.getElementById('stat-reading').textContent   = stats.currentlyReadingCount;
+    document.getElementById('stat-later').textContent     = stats.readLaterCount;
+    document.getElementById('stat-completed').textContent = stats.completedCount;
+
     document.getElementById('btn-logout').onclick = async () => {
         await fetch('/api/logout', { method: 'POST' });
+        isAdmin = false;
+        const adminItem = document.getElementById('drawer-admin-item');
+        if (adminItem) adminItem.hidden = true;
         location.reload();
     };
+
+    if (!isAdmin) {
+        const adminBtn = document.getElementById('btn-admin-login');
+        adminBtn.style.display = '';
+        adminBtn.onclick = () => showLoginOverlay(true);
+    }
 }
 
 // ============================================================
 //   لوحة الإدارة
 // ============================================================
 async function renderAdmin() {
+    setActiveDrawer('admin');
     app.appendChild(tpl('admin'));
+
+    const mdxInput   = document.getElementById('mdx-search-input');
+    const mdxSearch  = document.getElementById('btn-mdx-search');
+    const mdxResults = document.getElementById('mdx-results');
+
+    async function doMdxSearch() {
+        const q = mdxInput.value.trim();
+        if (!q) return;
+        mdxResults.innerHTML = '<div class="loader"><div class="loader-ring"></div></div>';
+        try {
+            const results = await api(`/mangadex/search?q=${encodeURIComponent(q)}`);
+            mdxResults.innerHTML = '';
+            if (!results.length) {
+                mdxResults.innerHTML = '<p class="empty-hint">لا توجد نتائج.</p>';
+                return;
+            }
+            results.forEach(manga => {
+                const card = document.createElement('div');
+                card.className = 'mdx-card';
+                const statusMap = { ongoing: 'مستمر', completed: 'مكتمل', hiatus: 'متوقف', cancelled: 'ملغى' };
+                card.innerHTML = `
+                    <img class="mdx-cover" src="${manga.cover || placeholderCover()}" alt="" loading="lazy">
+                    <div class="mdx-info">
+                        <div class="mdx-title">${escapeHtml(manga.title)}</div>
+                        <div class="mdx-status">${statusMap[manga.status] || manga.status || ''}</div>
+                        <div class="mdx-tags">${manga.tags.map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>
+                        <button class="btn btn-primary mdx-add-btn" style="margin-top:8px;font-size:12px;padding:8px 14px">+ إضافة للمكتبة</button>
+                    </div>
+                `;
+                card.querySelector('.mdx-add-btn').onclick = async (e) => {
+                    const btn = e.currentTarget;
+                    btn.disabled = true;
+                    btn.textContent = 'جاري الإضافة...';
+                    const manhwaId = 'm_' + Date.now();
+                    await api('/manhwa', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            id: manhwaId, title: manga.title, description: manga.description,
+                            coverUrl: manga.cover || '', tags: manga.tags, mdxId: manga.id, chapters: [],
+                        }),
+                    });
+                    navigate('detail', { id: manhwaId });
+                };
+                mdxResults.appendChild(card);
+            });
+        } catch (e) {
+            mdxResults.innerHTML = `<p class="empty-hint">خطأ: ${escapeHtml(e.message)}</p>`;
+        }
+    }
+
+    mdxSearch.onclick = doMdxSearch;
+    mdxInput.addEventListener('keydown', e => { if (e.key === 'Enter') doMdxSearch(); });
 
     const library = await api('/library');
     const libList = document.getElementById('admin-lib-list');
@@ -516,13 +809,21 @@ function routeFromHash() {
     const [view, id, chapter] = parts;
     const v = view || 'home';
     render(v, { id, chapter });
-    if (topViews.includes(v)) setActiveDrawer(v);
+    if (topViews.includes(v)) {
+        if (v === 'my-library') setActiveDrawer('my-library', id || 'favorites');
+        else setActiveDrawer(v);
+    }
 }
 window.addEventListener('hashchange', routeFromHash);
 
 window.addEventListener('load', async () => {
     try {
-        const me = await api('/me');
+        const res = await fetch('/api/me');
+        if (res.status === 401) {
+            showLoginOverlay();
+            return;
+        }
+        const me = await res.json();
         isAdmin = me.isAdmin;
     } catch { isAdmin = false; }
 

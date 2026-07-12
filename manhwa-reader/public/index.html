@@ -47,6 +47,33 @@
                 <span class="drawer-dot"></span>
             </button>
         </li>
+        <!-- قسم مكتبتي -->
+        <li><div class="drawer-divider"></div><div class="drawer-section-label">مكتبتي</div></li>
+        <li>
+            <button class="drawer-item" data-view="my-library" data-list="favorites">
+                ♥ مفضلة
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+        <li>
+            <button class="drawer-item" data-view="my-library" data-list="currentlyReading">
+                📖 أقرأها الآن
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+        <li>
+            <button class="drawer-item" data-view="my-library" data-list="readLater">
+                🔖 قراءة لاحقاً
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+        <li>
+            <button class="drawer-item" data-view="my-library" data-list="completed">
+                ✓ مقروءة
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+        <li><div class="drawer-divider"></div></li>
         <li>
             <button class="drawer-item" data-view="profile">
                 حساب
@@ -55,7 +82,6 @@
             </button>
         </li>
         <li id="drawer-admin-item" hidden>
-            <div class="drawer-divider"></div>
             <button class="drawer-item" data-view="admin">
                 إدارة
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -76,11 +102,7 @@
         <h2 class="section-title">تابع القراءة</h2>
         <div class="hscroll" id="continue-scroll"></div>
     </section>
-    <section>
-        <h2 class="section-title">المكتبة</h2>
-        <div class="grid" id="library-grid"></div>
-        <p class="empty-hint" id="library-empty" hidden>لا يوجد أي عمل — أضف أول عمل من لوحة الإدارة.</p>
-    </section>
+    <p class="home-empty-hint" id="home-empty" hidden>لا يوجد أي عمل — أضف أول عمل من لوحة الإدارة.</p>
 </template>
 
 <template id="tpl-library-list">
@@ -90,6 +112,19 @@
     </div>
     <div class="lib-list-grid" id="lib-list-grid"></div>
     <p class="empty-hint" id="lib-list-empty" hidden>لا توجد أعمال في المكتبة بعد.</p>
+</template>
+
+<template id="tpl-my-library">
+    <div class="my-lib-tabs-wrap">
+        <div class="my-lib-tabs" id="my-lib-tabs">
+            <button class="my-lib-tab" data-list="favorites">♥ مفضلة</button>
+            <button class="my-lib-tab" data-list="currentlyReading">📖 جاري</button>
+            <button class="my-lib-tab" data-list="readLater">🔖 لاحقاً</button>
+            <button class="my-lib-tab" data-list="completed">✓ مقروءة</button>
+        </div>
+    </div>
+    <div class="lib-list-grid" id="my-lib-grid"></div>
+    <p class="empty-hint" id="my-lib-empty" hidden>لا توجد أعمال في هذه القائمة.</p>
 </template>
 
 <template id="tpl-detail">
@@ -109,11 +144,8 @@
                 <svg viewBox="0 0 24 24"><path d="M6 4l12 8-12 8V4z"/></svg>
                 متابعة القراءة
             </button>
-            <button class="icon-toggle" id="btn-fav" title="مفضلة">
-                <svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9.5-9C.8 8.1 2.6 4 6.5 4 9 4 11 5.8 12 7c1-1.2 3-3 5.5-3 3.9 0 5.7 4.1 4 8-2.5 4.5-9.5 9-9.5 9z"/></svg>
-            </button>
-            <button class="icon-toggle" id="btn-later" title="مشاهدة لاحقًا">
-                <svg viewBox="0 0 24 24"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/></svg>
+            <button class="icon-toggle" id="btn-add-list" title="أضف للمكتبة">
+                <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
             </button>
         </div>
         <div id="admin-upload-section" hidden>
@@ -125,7 +157,11 @@
             <p class="form-hint" id="upload-status"></p>
         </form>
         </div>
-        <h2 class="section-title">الفصول</h2>
+        <div id="mdx-chapter-section" hidden>
+            <h2 class="section-title">فصول MangaDex</h2>
+            <div class="chapter-list" id="mdx-chapter-list"></div>
+        </div>
+        <h2 class="section-title">الفصول المحلية</h2>
         <div class="chapter-list" id="chapter-list"></div>
     </div>
 </template>
@@ -154,12 +190,15 @@
     </header>
     <div class="stat-grid">
         <div class="stat-card"><span class="stat-num" id="stat-chapters">0</span><span class="stat-label">فصل مقروء</span></div>
-        <div class="stat-card"><span class="stat-num" id="stat-manhwa">0</span><span class="stat-label">عمل بالمكتبة</span></div>
-        <div class="stat-card"><span class="stat-num" id="stat-fav">0</span><span class="stat-label">بالمفضلة</span></div>
-        <div class="stat-card"><span class="stat-num" id="stat-later">0</span><span class="stat-label">لاحقًا</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-manhwa">0</span><span class="stat-label">في المكتبة</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-fav">0</span><span class="stat-label">مفضلة ♥</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-reading">0</span><span class="stat-label">أقرأها الآن 📖</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-later">0</span><span class="stat-label">قراءة لاحقاً 🔖</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-completed">0</span><span class="stat-label">مقروءة ✓</span></div>
     </div>
-    <div style="padding:30px 18px;text-align:center">
-        <button class="btn btn-primary" id="btn-logout" style="max-width:200px">تسجيل الخروج</button>
+    <div class="profile-actions">
+        <button class="btn btn-primary" id="btn-logout">تسجيل الخروج</button>
+        <button class="btn btn-admin-toggle" id="btn-admin-login" style="display:none">🔐 دخول كمدير</button>
     </div>
 </template>
 
@@ -168,10 +207,19 @@
         <h1 class="brand">⚙ الإدارة</h1>
     </header>
 
+    <h2 class="section-title">بحث وإضافة من MangaDex</h2>
+    <div class="mdx-search-wrap">
+        <div class="mdx-search-row">
+            <input type="text" id="mdx-search-input" placeholder="Solo Leveling, Tower of God, ...">
+            <button class="btn btn-primary" id="btn-mdx-search" style="width:auto;white-space:nowrap">بحث ✦</button>
+        </div>
+        <div id="mdx-results"></div>
+    </div>
+
     <h2 class="section-title">المكتبة</h2>
     <div class="admin-lib-list" id="admin-lib-list"></div>
 
-    <h2 class="section-title">إضافة عمل جديد</h2>
+    <h2 class="section-title">إضافة عمل يدوياً</h2>
     <form class="form" id="form-admin-add-manhwa">
         <label>العنوان<input type="text" name="title" required></label>
         <label>الوصف<textarea name="description" rows="3"></textarea></label>
