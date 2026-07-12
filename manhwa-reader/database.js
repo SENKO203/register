@@ -73,10 +73,10 @@ function totalChaptersRead() {
 function getLists() {
     const raw = load(FILES.LISTS);
     return {
-        favorites:        raw.favorites        || [],
-        currentlyReading: raw.currentlyReading || [],
-        readLater:        raw.readLater        || [],
-        completed:        raw.completed        || [],
+        favorites:        [...new Set(raw.favorites        || [])],
+        currentlyReading: [...new Set(raw.currentlyReading || [])],
+        readLater:        [...new Set(raw.readLater        || [])],
+        completed:        [...new Set(raw.completed        || [])],
     };
 }
 function toggleList(listName, manhwaId) {

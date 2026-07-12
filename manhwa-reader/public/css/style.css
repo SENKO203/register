@@ -404,11 +404,12 @@ svg {
 .reader-page img { width: 100%; display: block; }
 .text-overlay {
     position: absolute;
-    background: rgba(255,255,255,.97); color: #0A0802;
+    background: rgba(255,255,255,.98); color: #0A0802;
     display: flex; align-items: center; justify-content: center;
-    text-align: center; font-size: 13px; line-height: 1.4;
-    padding: 6px 8px; border-radius: 50% / 40%;
-    font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    text-align: center; font-size: clamp(8px, 1.6vw, 12px); line-height: 1.35;
+    padding: 4px 6px; border-radius: 12px;
+    font-weight: 700; box-shadow: 0 2px 10px rgba(0,0,0,.35);
+    overflow: hidden; word-break: break-word;
 }
 .reader-end { text-align: center; padding: 50px 18px 70px; }
 .reader-end p { color: var(--text-muted); margin-bottom: 18px; }

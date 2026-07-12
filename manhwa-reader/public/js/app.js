@@ -243,6 +243,10 @@ function buildAzoraCard(m, progress, showProgress = false) {
         : `<div class="lcc-row"><span class="lcc-num" style="color:var(--text-muted)">لا توجد فصول بعد</span></div>`;
 
     return `
+        <div class="list-card-cover-wrap">
+            <img class="list-card-cover" src="${m.coverUrl || placeholderCover()}" alt="${escapeHtml(m.title)}" loading="lazy">
+            <span class="list-card-type ${typeClass}">${typeLabel}</span>
+        </div>
         <div class="list-card-body">
             <div class="list-card-title">${escapeHtml(m.title)}</div>
             <div class="list-card-status">
@@ -252,10 +256,6 @@ function buildAzoraCard(m, progress, showProgress = false) {
             </div>
             <div class="list-card-chapters-inner">${chapRows}</div>
             ${showProgress && total ? `<div class="list-card-bar"><div class="list-card-fill" style="width:${pct}%"></div></div>` : ''}
-        </div>
-        <div class="list-card-cover-wrap">
-            <img class="list-card-cover" src="${m.coverUrl || placeholderCover()}" alt="${escapeHtml(m.title)}" loading="lazy">
-            <span class="list-card-type ${typeClass}">${typeLabel}</span>
         </div>
     `;
 }
