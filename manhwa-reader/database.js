@@ -5,12 +5,12 @@ const path = require('path');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const FILES = {
-    LIBRARY: path.join(DATA_DIR, 'library.json'),     // كل الأعمال المضافة
-    PROGRESS: path.join(DATA_DIR, 'progress.json'),   // تتبع القراءة (فصول مقروءة لكل عمل)
-    LISTS: path.join(DATA_DIR, 'lists.json'),          // مفضلة + مشاهدة لاحقًا
+    LIBRARY: path.join(DATA_DIR, 'library.json'),
+    PROGRESS: path.join(DATA_DIR, 'progress.json'),
+    LISTS: path.join(DATA_DIR, 'lists.json'),
+    USERS: path.join(DATA_DIR, 'users.json'),
 };
 
-// ننشئ مجلد data تلقائيًا لو ما كان موجودًا
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 function ensure(file, fallback) {
@@ -19,6 +19,7 @@ function ensure(file, fallback) {
 ensure(FILES.LIBRARY, {});
 ensure(FILES.PROGRESS, {});
 ensure(FILES.LISTS, { favorites: [], currentlyReading: [], readLater: [], completed: [] });
+ensure(FILES.USERS, {});
 
 function load(file) {
     try { return JSON.parse(fs.readFileSync(file, 'utf-8')); }
@@ -96,9 +97,25 @@ function toggleList(listName, manhwaId) {
     return lists[listName];
 }
 
+// ============================================================
+//   المستخدمون
+// ============================================================
+function getUsers() { return load(FILES.USERS); }
+function getUserByUsername(username) {
+    return Object.values(getUsers()).find(u => u.username === username) || null;
+}
+function getUserById(id) { return getUsers()[id] || null; }
+function upsertUser(id, data) {
+    const users = getUsers();
+    users[id] = { ...(users[id] || {}), ...data, id };
+    save(FILES.USERS, users);
+    return users[id];
+}
+
 module.exports = {
     DATA_DIR,
     getLibrary, getManhwa, upsertManhwa, deleteManhwa,
     getProgress, markChapterRead, getAllProgress, totalChaptersRead,
     getLists, toggleList,
+    getUsers, getUserByUsername, getUserById, upsertUser,
 };

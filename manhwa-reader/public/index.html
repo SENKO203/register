@@ -47,7 +47,6 @@
                 <span class="drawer-dot"></span>
             </button>
         </li>
-        <!-- قسم مكتبتي -->
         <li><div class="drawer-divider"></div><div class="drawer-section-label">مكتبتي</div></li>
         <li>
             <button class="drawer-item" data-view="my-library" data-list="favorites">
@@ -133,20 +132,30 @@
     <p class="empty-hint" id="my-lib-empty" hidden>لا توجد أعمال في هذه القائمة.</p>
 </template>
 
+<!-- صفحة التفاصيل — AZORA style -->
 <template id="tpl-detail">
-    <div class="detail-hero">
-        <img class="detail-cover" id="detail-cover" alt="">
-        <div class="detail-hero-fade"></div>
-        <button class="icon-btn back-btn" id="btn-back">
-            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
-        </button>
-        <div class="detail-hero-bottom">
+    <!-- الخلفية المضبّبة تُضاف على body.detail-page::before عبر CSS -->
+    <button class="icon-btn detail-back-btn" id="btn-back">
+        <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+
+    <!-- بطاقة العمل العلوية: غلاف + معلومات -->
+    <div class="detail-card">
+        <div class="detail-thumb-wrap">
+            <img class="detail-thumb" id="detail-cover" alt="">
+        </div>
+        <div class="detail-info">
             <h1 class="detail-title" id="detail-title"></h1>
+            <div class="detail-status-row">
+                <span class="status-dot"></span>
+                <span>مستمر</span>
+                <span class="detail-ch-count" id="detail-ch-count"></span>
+            </div>
             <div class="tag-row" id="detail-tags"></div>
             <div class="action-row">
                 <button class="btn btn-blue" id="btn-add-list">
                     <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-                    إضافة للمفضلة
+                    أضف للمكتبة
                 </button>
                 <button class="btn btn-primary" id="btn-continue-read">
                     <svg viewBox="0 0 24 24"><path d="M6 4l12 8-12 8V4z"/></svg>
@@ -155,24 +164,21 @@
             </div>
         </div>
     </div>
-    <div class="detail-body">
+
+    <!-- الوصف -->
+    <div class="detail-desc-wrap">
         <p class="detail-desc" id="detail-desc"></p>
-        <div id="admin-upload-section" hidden>
-        <h2 class="section-title">إضافة فصل جديد</h2>
-        <form class="form" id="form-upload-chapter">
-            <label>رقم الفصل<input type="number" name="chapterNum" required min="1"></label>
-            <label>صور الفصل (بترتيب الصفحات)<input type="file" name="pages" accept="image/*" multiple required></label>
-            <button class="btn btn-primary" type="submit" id="btn-upload-chapter">معالجة وإضافة</button>
-            <p class="form-hint" id="upload-status"></p>
-        </form>
-        </div>
-        <div id="mdx-chapter-section" hidden>
-            <h2 class="section-title">فصول MangaDex</h2>
-            <div class="chapter-list" id="mdx-chapter-list"></div>
-        </div>
-        <h2 class="section-title">الفصول المحلية</h2>
-        <div class="chapter-list" id="chapter-list"></div>
     </div>
+
+    <!-- فصول MangaDex — للمدير فقط -->
+    <div id="mdx-chapter-section" hidden>
+        <h2 class="section-title">فصول MangaDex</h2>
+        <div class="chapter-list" id="mdx-chapter-list"></div>
+    </div>
+
+    <!-- الفصول المحلية -->
+    <h2 class="section-title">الفصول</h2>
+    <div class="chapter-list" id="chapter-list"></div>
 </template>
 
 <template id="tpl-reader">
@@ -194,8 +200,9 @@
 
 <template id="tpl-profile">
     <header class="page-head profile-head">
-        <div class="avatar">📖</div>
-        <h1 class="brand">قارئي الشخصي</h1>
+        <div class="avatar" id="profile-avatar">📖</div>
+        <h1 class="brand" id="profile-name">قارئي الشخصي</h1>
+        <p class="profile-username" id="profile-username" style="display:none"></p>
     </header>
     <div class="stat-grid">
         <div class="stat-card"><span class="stat-num" id="stat-chapters">0</span><span class="stat-label">فصل مقروء</span></div>
@@ -205,9 +212,25 @@
         <div class="stat-card"><span class="stat-num" id="stat-later">0</span><span class="stat-label">قراءة لاحقاً 🔖</span></div>
         <div class="stat-card"><span class="stat-num" id="stat-completed">0</span><span class="stat-label">مقروءة ✓</span></div>
     </div>
+    <!-- أزرار التعديل — تظهر للمستخدمين المسجلين -->
+    <div class="profile-edit-section" id="profile-edit-section" style="display:none">
+        <h2 class="section-title">تعديل الحساب</h2>
+        <div class="form" style="padding:0 18px 24px">
+            <label>الاسم المعروض<input type="text" id="edit-display-name" placeholder="اسمك"></label>
+            <div class="emoji-picker-row">
+                <span style="font-size:13px;color:var(--text-muted)">أيقونة الحساب</span>
+                <div class="emoji-options" id="emoji-options">
+                    📖 📚 🗡️ ⚔️ 🔥 ❄️ 🌙 ⭐ 👑 🐉
+                </div>
+            </div>
+            <button class="btn btn-blue" id="btn-save-profile">حفظ التغييرات</button>
+        </div>
+    </div>
     <div class="profile-actions">
         <button class="btn btn-primary" id="btn-logout">تسجيل الخروج</button>
         <button class="btn btn-admin-toggle" id="btn-admin-login" style="display:none">🔐 دخول كمدير</button>
+        <button class="btn btn-outline" id="btn-register-link" style="display:none">إنشاء حساب</button>
+        <button class="btn btn-outline" id="btn-user-login-link" style="display:none">تسجيل دخول بحساب</button>
     </div>
 </template>
 
@@ -279,6 +302,40 @@
     </div>
 </template>
 
+<!-- نموذج تعديل المانهوا (للمدير) -->
+<template id="tpl-admin-edit">
+    <header class="page-head">
+        <button class="icon-btn" id="edit-back-btn">
+            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <h1 class="brand" style="font-size:18px">تعديل العمل</h1>
+    </header>
+
+    <div class="form" style="padding:0 18px 20px">
+        <div style="text-align:center;margin-bottom:16px">
+            <img id="edit-cover-preview" style="width:100px;height:140px;object-fit:cover;border-radius:10px;border:2px solid var(--red)" alt="">
+        </div>
+        <label>العنوان<input type="text" id="edit-title"></label>
+        <label>الوصف<textarea id="edit-description" rows="4"></textarea></label>
+        <label>الوسوم (افصل بفاصلة)<input type="text" id="edit-tags"></label>
+        <label>رابط صورة الغلاف<input type="text" id="edit-cover-url"></label>
+        <button class="btn btn-primary" id="btn-save-edit">حفظ التغييرات</button>
+    </div>
+
+    <h2 class="section-title">إضافة فصل جديد</h2>
+    <form class="form" id="form-upload-chapter">
+        <label>رقم الفصل<input type="number" name="chapterNum" required min="1"></label>
+        <label>صور الفصل (بترتيب الصفحات)<input type="file" name="pages" accept="image/*" multiple required></label>
+        <button class="btn btn-primary" type="submit" id="btn-upload-chapter">معالجة وإضافة</button>
+        <p class="form-hint" id="upload-status"></p>
+    </form>
+
+    <h2 class="section-title">فصول MangaDex</h2>
+    <div id="edit-mdx-section">
+        <p class="empty-hint" id="edit-mdx-hint">لا يوجد رابط MangaDex لهذا العمل.</p>
+        <div class="chapter-list" id="edit-mdx-chapter-list" style="display:none"></div>
+    </div>
+</template>
 
 <script src="/js/app.js"></script>
 </body>

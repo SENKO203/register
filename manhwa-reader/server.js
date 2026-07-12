@@ -68,15 +68,20 @@ app.use(requireAuth);
 
 app.post('/api/login', (req, res) => {
     const auth = getAuthConfig();
-    const { password } = req.body;
-    // First setup = no admin password exists yet
+    const { password, username } = req.body;
     const isFirstSetup = !auth.adminPasswordHash;
     let isAdmin = false;
+    let sessionExtra = {};
 
-    if (isFirstSetup) {
+    if (username) {
+        // تسجيل دخول بالاسم وكلمة السر (مستخدم عادي) — له الأولوية دائماً
+        const user = db.getUserByUsername(username.trim().toLowerCase());
+        if (!user || hashPassword(password || '', user.salt) !== user.passwordHash)
+            return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور خاطئة' });
+        sessionExtra = { userId: user.id, username: user.displayName, avatarEmoji: user.avatarEmoji };
+    } else if (isFirstSetup) {
         if (!password || password.length < 4)
             return res.status(400).json({ error: 'كلمة المرور لازم 4 أحرف على الأقل' });
-        // Create admin password only; site remains open to readers by default
         const adminSalt = crypto.randomBytes(16).toString('hex');
         const adminPasswordHash = hashPassword(password, adminSalt);
         fs.writeFileSync(AUTH_CONFIG_PATH, JSON.stringify({
@@ -85,23 +90,20 @@ app.post('/api/login', (req, res) => {
         isAdmin = true;
     } else {
         const pwd = password || '';
-        // Check admin password first
         if (auth.adminPasswordHash && hashPassword(pwd, auth.adminSalt) === auth.adminPasswordHash) {
             isAdmin = true;
         } else if (auth.passwordHash) {
-            // Check reader password
             if (hashPassword(pwd, auth.salt) !== auth.passwordHash)
                 return res.status(401).json({ error: 'كلمة مرور خاطئة' });
         } else {
-            // No reader password and wrong admin password
             return res.status(401).json({ error: 'كلمة مرور خاطئة' });
         }
     }
 
     const token = crypto.randomBytes(24).toString('hex');
-    activeSessions.set(token, { isAdmin });
+    activeSessions.set(token, { isAdmin, ...sessionExtra });
     res.cookie('session', token, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000 });
-    res.json({ ok: true, isFirstSetup, isAdmin });
+    res.json({ ok: true, isFirstSetup, isAdmin, ...sessionExtra });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -113,7 +115,46 @@ app.post('/api/logout', (req, res) => {
 app.get('/api/me', (req, res) => {
     const token = req.cookies?.session;
     const session = token ? activeSessions.get(token) : null;
-    res.json({ isAdmin: session?.isAdmin || false });
+    if (!session) return res.json({ isAdmin: false, loggedIn: false });
+    const { isAdmin, userId, username, avatarEmoji } = session;
+    res.json({ isAdmin: isAdmin || false, loggedIn: true, userId, username, avatarEmoji });
+});
+
+// تسجيل حساب جديد
+app.post('/api/register', (req, res) => {
+    const { username, password } = req.body || {};
+    if (!username || username.trim().length < 2)
+        return res.status(400).json({ error: 'اسم المستخدم يحتاج حرفين على الأقل' });
+    if (!password || password.length < 4)
+        return res.status(400).json({ error: 'كلمة المرور يحتاج 4 أحرف على الأقل' });
+    const clean = username.trim().toLowerCase();
+    if (db.getUserByUsername(clean))
+        return res.status(409).json({ error: 'اسم المستخدم موجود مسبقاً' });
+    const id = 'u_' + crypto.randomBytes(8).toString('hex');
+    const salt = crypto.randomBytes(16).toString('hex');
+    const passwordHash = hashPassword(password, salt);
+    const user = db.upsertUser(id, { username: clean, displayName: username.trim(), passwordHash, salt, avatarEmoji: '📖', createdAt: Date.now() });
+    const token = crypto.randomBytes(24).toString('hex');
+    activeSessions.set(token, { isAdmin: false, userId: user.id, username: user.displayName, avatarEmoji: user.avatarEmoji });
+    res.cookie('session', token, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000 });
+    res.json({ ok: true, username: user.displayName });
+});
+
+// تحديث بروفايل المستخدم
+app.post('/api/profile/update', (req, res) => {
+    const token = req.cookies?.session;
+    const session = token ? activeSessions.get(token) : null;
+    if (!session?.userId) return res.status(401).json({ error: 'يحتاج تسجيل دخول' });
+    const { displayName, avatarEmoji } = req.body || {};
+    const user = db.getUserById(session.userId);
+    if (!user) return res.status(404).json({ error: 'المستخدم غير موجود' });
+    const updates = {};
+    if (displayName && displayName.trim().length >= 2) updates.displayName = displayName.trim();
+    if (avatarEmoji) updates.avatarEmoji = avatarEmoji;
+    const updated = db.upsertUser(session.userId, updates);
+    session.displayName = updated.displayName;
+    session.avatarEmoji = updated.avatarEmoji;
+    res.json({ ok: true, displayName: updated.displayName, avatarEmoji: updated.avatarEmoji });
 });
 
 app.use(express.static(path.join(__dirname, 'public')));

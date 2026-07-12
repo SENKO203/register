@@ -1,6 +1,7 @@
 'use strict';
 const app = document.getElementById('app');
 let isAdmin = false;
+let currentUser = null; // { username, avatarEmoji, userId }
 
 // ============================================================
 //   أدوات مساعدة
@@ -33,52 +34,161 @@ function placeholderCover() {
 }
 
 // ============================================================
-//   نافذة تسجيل الدخول
+//   نافذة تسجيل الدخول / إنشاء حساب
 // ============================================================
-function showLoginOverlay(isAdminMode = false) {
+function showLoginOverlay(options = {}) {
     if (document.getElementById('login-overlay')) return;
+    const { adminMode = false, startTab = 'admin', onClose = null } = options;
+
     const overlay = document.createElement('div');
     overlay.id = 'login-overlay';
     overlay.className = 'login-overlay';
+
+    const tabs = [
+        { id: 'admin', label: 'مدير' },
+        { id: 'user', label: 'تسجيل دخول' },
+        { id: 'register', label: 'حساب جديد' },
+    ];
+
     overlay.innerHTML = `
         <div class="login-box">
             <div class="login-logo">MED<span class="logo-accent">O</span>SA</div>
-            <p class="login-hint">${isAdminMode ? 'كلمة مرور المدير' : 'أدخل كلمة المرور للدخول'}</p>
-            <input type="password" class="login-input" id="login-pw" placeholder="كلمة المرور" autocomplete="current-password">
-            <button class="btn btn-primary login-btn" id="login-submit">${isAdminMode ? 'دخول كمدير' : 'دخول'}</button>
+            <div class="login-tabs">
+                ${tabs.map(t => `<button class="login-tab${t.id === startTab ? ' active' : ''}" data-tab="${t.id}">${t.label}</button>`).join('')}
+            </div>
+            <div id="login-form-area"></div>
             <p class="login-error" id="login-error" style="display:none"></p>
+            <button class="login-skip" id="login-skip">تصفح بدون تسجيل دخول ✕</button>
         </div>
     `;
-    const doLogin = async () => {
-        const pw = document.getElementById('login-pw').value;
-        const errEl = document.getElementById('login-error');
-        const btn = document.getElementById('login-submit');
-        btn.disabled = true; errEl.style.display = 'none';
+
+    let activeTab = startTab;
+
+    function renderForm(tab) {
+        const area = overlay.querySelector('#login-form-area');
+        if (tab === 'admin') {
+            area.innerHTML = `
+                <p class="login-hint">كلمة مرور المدير</p>
+                <input type="password" class="login-input" id="login-pw" placeholder="كلمة المرور المدير" autocomplete="current-password">
+                <button class="btn btn-primary login-btn" id="login-submit">دخول كمدير</button>
+            `;
+            area.querySelector('#login-submit').onclick = () => doAdminLogin();
+            area.querySelector('#login-pw').onkeydown = e => { if (e.key === 'Enter') doAdminLogin(); };
+        } else if (tab === 'user') {
+            area.innerHTML = `
+                <p class="login-hint">تسجيل دخول بحساب مسجّل</p>
+                <input type="text" class="login-input" id="login-username" placeholder="اسم المستخدم" autocomplete="username" style="margin-bottom:8px">
+                <input type="password" class="login-input" id="login-pw" placeholder="كلمة المرور" autocomplete="current-password">
+                <button class="btn btn-primary login-btn" id="login-submit">دخول</button>
+            `;
+            area.querySelector('#login-submit').onclick = () => doUserLogin();
+            area.querySelector('#login-pw').onkeydown = e => { if (e.key === 'Enter') doUserLogin(); };
+        } else {
+            area.innerHTML = `
+                <p class="login-hint">إنشاء حساب جديد</p>
+                <input type="text" class="login-input" id="reg-username" placeholder="اسم المستخدم" autocomplete="username" style="margin-bottom:8px">
+                <input type="password" class="login-input" id="reg-pw" placeholder="كلمة المرور (4 أحرف+)" autocomplete="new-password">
+                <button class="btn btn-primary login-btn" id="login-submit">إنشاء الحساب</button>
+            `;
+            area.querySelector('#login-submit').onclick = () => doRegister();
+            area.querySelector('#reg-pw').onkeydown = e => { if (e.key === 'Enter') doRegister(); };
+        }
+        setTimeout(() => area.querySelector('input')?.focus(), 100);
+    }
+
+    overlay.querySelectorAll('.login-tab').forEach(btn => {
+        btn.onclick = () => {
+            activeTab = btn.dataset.tab;
+            overlay.querySelectorAll('.login-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === activeTab));
+            overlay.querySelector('#login-error').style.display = 'none';
+            renderForm(activeTab);
+        };
+    });
+
+    function showError(msg) {
+        const el = overlay.querySelector('#login-error');
+        el.textContent = msg; el.style.display = 'block';
+    }
+
+    async function doAdminLogin() {
+        const pw = overlay.querySelector('#login-pw')?.value;
+        const btn = overlay.querySelector('#login-submit');
+        btn.disabled = true;
+        overlay.querySelector('#login-error').style.display = 'none';
         try {
             const r = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ password: pw }),
             });
             const result = await r.json();
             if (result.error) throw new Error(result.error);
             overlay.remove();
             isAdmin = result.isAdmin;
-            const adminItem = document.getElementById('drawer-admin-item');
-            if (adminItem) adminItem.hidden = !isAdmin;
-            if (isAdminMode && result.isAdmin) navigate('admin');
+            currentUser = null;
+            updateAdminUI();
+            if (result.isAdmin) navigate('admin');
             else if (!location.hash) navigate('home');
             else routeFromHash();
-        } catch (e) {
-            errEl.textContent = e.message;
-            errEl.style.display = 'block';
-            btn.disabled = false;
-        }
+        } catch (e) { showError(e.message); btn.disabled = false; }
+    }
+
+    async function doUserLogin() {
+        const username = overlay.querySelector('#login-username')?.value?.trim();
+        const pw = overlay.querySelector('#login-pw')?.value;
+        const btn = overlay.querySelector('#login-submit');
+        btn.disabled = true;
+        overlay.querySelector('#login-error').style.display = 'none';
+        try {
+            const r = await fetch('/api/login', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password: pw }),
+            });
+            const result = await r.json();
+            if (result.error) throw new Error(result.error);
+            overlay.remove();
+            isAdmin = false;
+            currentUser = result.userId ? { userId: result.userId, username: result.username, avatarEmoji: result.avatarEmoji } : null;
+            updateAdminUI();
+            routeFromHash();
+            if (!location.hash) navigate('home');
+        } catch (e) { showError(e.message); btn.disabled = false; }
+    }
+
+    async function doRegister() {
+        const username = overlay.querySelector('#reg-username')?.value?.trim();
+        const pw = overlay.querySelector('#reg-pw')?.value;
+        const btn = overlay.querySelector('#login-submit');
+        btn.disabled = true;
+        overlay.querySelector('#login-error').style.display = 'none';
+        try {
+            const r = await fetch('/api/register', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password: pw }),
+            });
+            const result = await r.json();
+            if (result.error) throw new Error(result.error);
+            overlay.remove();
+            isAdmin = false;
+            currentUser = { username: result.username, avatarEmoji: result.avatarEmoji };
+            updateAdminUI();
+            navigate('profile');
+        } catch (e) { showError(e.message); btn.disabled = false; }
+    }
+
+    overlay.querySelector('#login-skip').onclick = () => {
+        overlay.remove();
+        if (onClose) onClose();
+        else if (!location.hash) navigate('home');
+        else routeFromHash();
     };
-    overlay.querySelector('#login-submit').onclick = doLogin;
-    overlay.querySelector('#login-pw').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
     document.body.appendChild(overlay);
-    setTimeout(() => overlay.querySelector('#login-pw')?.focus(), 150);
+    renderForm(activeTab);
+}
+
+function updateAdminUI() {
+    const adminItem = document.getElementById('drawer-admin-item');
+    if (adminItem) adminItem.hidden = !isAdmin;
 }
 
 // ============================================================
@@ -87,14 +197,8 @@ function showLoginOverlay(isAdminMode = false) {
 const drawer     = document.getElementById('drawer');
 const drawerOver = document.getElementById('drawer-overlay');
 
-function openDrawer() {
-    drawer.classList.add('open');
-    drawerOver.classList.add('open');
-}
-function closeDrawer() {
-    drawer.classList.remove('open');
-    drawerOver.classList.remove('open');
-}
+function openDrawer() { drawer.classList.add('open'); drawerOver.classList.add('open'); }
+function closeDrawer() { drawer.classList.remove('open'); drawerOver.classList.remove('open'); }
 
 document.getElementById('btn-open-drawer').onclick  = openDrawer;
 document.getElementById('btn-close-drawer').onclick = closeDrawer;
@@ -143,12 +247,14 @@ async function navigate(view, params = {}) {
 async function render(view, params) {
     app.innerHTML = '';
     document.body.classList.remove('detail-page');
+    document.body.style.removeProperty('--detail-bg-url');
     pageTransition();
     if (view === 'home')         return renderHome();
     if (view === 'library-list') return renderLibraryList();
     if (view === 'my-library')   return renderMyLibrary(params.id || 'favorites');
     if (view === 'profile')      return renderProfile();
     if (view === 'admin')        { if (!isAdmin) return navigate('home'); return renderAdmin(); }
+    if (view === 'admin-edit')   { if (!isAdmin) return navigate('home'); return renderAdminEdit(params.id); }
     if (view === 'detail')       return renderDetail(params.id);
     if (view === 'reader')       return renderReader(params.id, params.chapter);
 }
@@ -165,7 +271,6 @@ async function renderHome() {
         api('/progress-all'),
     ]);
 
-    // بانر Hero — أول عمل بالمكتبة
     const heroSection = document.getElementById('hero-section');
     if (library.length) {
         const featured = library[0];
@@ -190,7 +295,6 @@ async function renderHome() {
         return;
     }
 
-    // تابع القراءة
     const inProgress = library.filter(m => allProgress[m.id]?.lastReadChapter);
     if (inProgress.length) {
         document.getElementById('continue-row').hidden = false;
@@ -315,7 +419,6 @@ async function renderMyLibrary(listName = 'favorites') {
     setActiveDrawer('my-library', listName);
     app.appendChild(tpl('my-library'));
 
-    // تفعيل التاب الصحيح
     const tabs = document.querySelectorAll('.my-lib-tab');
     tabs.forEach(tab => {
         tab.classList.toggle('active', tab.dataset.list === listName);
@@ -388,7 +491,7 @@ function showAddToListSheet(manhwaId, lists) {
                 await api(`/lists/${listName}/toggle/${manhwaId}`, { method: 'POST' });
                 btn.classList.toggle('active');
                 btn.querySelector('.sheet-check').textContent = btn.classList.contains('active') ? '✓' : '';
-            } catch (e) { /* ignore */ }
+            } catch { /* ignore */ }
         };
     });
 
@@ -399,27 +502,57 @@ function showAddToListSheet(manhwaId, lists) {
 }
 
 // ============================================================
-//   صفحة التفاصيل
+//   صفحة التفاصيل — AZORA style
 // ============================================================
 async function renderDetail(id) {
     const [m, lists] = await Promise.all([
         api('/manhwa/' + id),
         api('/lists'),
     ]);
+
+    // تفعيل AZORA: خلفية مضبّبة من الغلاف
+    document.body.classList.add('detail-page');
+    if (m.coverUrl) {
+        document.body.style.setProperty('--detail-bg-url', `url("${m.coverUrl}")`);
+    }
+
     app.appendChild(tpl('detail'));
 
-    document.getElementById('detail-cover').src = m.coverUrl || placeholderCover();
+    // الغلاف
+    const coverEl = document.getElementById('detail-cover');
+    coverEl.src = m.coverUrl || placeholderCover();
+
+    // العنوان + معلومات
     document.getElementById('detail-title').textContent = m.title;
     document.getElementById('detail-desc').textContent = m.description || '';
+
+    const chapters = m.chapters || [];
+    const chCountEl = document.getElementById('detail-ch-count');
+    if (chCountEl) chCountEl.textContent = chapters.length ? `${chapters.length} فصل` : '';
+
+    // زر الرجوع
     document.getElementById('btn-back').onclick = () => history.back();
 
-    const uploadSection = document.getElementById('admin-upload-section');
-    if (uploadSection) uploadSection.hidden = !isAdmin;
+    // وسوم
+    const tagsEl = document.getElementById('detail-tags');
+    (m.tags || []).forEach(t => {
+        const chip = document.createElement('span');
+        chip.className = 'tag-chip'; chip.textContent = t;
+        tagsEl.appendChild(chip);
+    });
 
     // زر أضف للمكتبة
     document.getElementById('btn-add-list').onclick = () => showAddToListSheet(id, lists);
 
-    // MangaDex — فصول تلقائية
+    // زر القراءة
+    document.getElementById('btn-continue-read').onclick = () => {
+        const next = m.progress.lastReadChapter
+            ? chapters.find(c => String(c.num) === String(m.progress.lastReadChapter))?.num
+            : chapters[0]?.num;
+        if (next != null) navigate('reader', { id, chapter: next });
+    };
+
+    // فصول MangaDex — للمدير فقط
     if (isAdmin && m.mdxId) {
         const mdxSection = document.getElementById('mdx-chapter-section');
         if (mdxSection) {
@@ -433,7 +566,6 @@ async function renderDetail(id) {
                 if (!mdxChapters.length) {
                     mdxList.innerHTML = '<p class="empty-hint">لا توجد فصول على MangaDex.</p>';
                 } else {
-                    // زر التحميل الجماعي في الأعلى
                     const lang = mdxChapters[0]?.lang || 'en';
                     const bulkBtn = document.createElement('button');
                     bulkBtn.className = 'btn btn-blue';
@@ -469,6 +601,7 @@ async function renderDetail(id) {
                         }
                     };
                     mdxList.appendChild(bulkBtn);
+
                     mdxChapters.forEach(ch => {
                         const downloaded = existingNums.has(String(ch.num));
                         const isAr = ch.lang === 'ar';
@@ -527,73 +660,23 @@ async function renderDetail(id) {
         }
     }
 
-    const tagsEl = document.getElementById('detail-tags');
-    (m.tags || []).forEach(t => {
-        const chip = document.createElement('span');
-        chip.className = 'tag-chip'; chip.textContent = t;
-        tagsEl.appendChild(chip);
-    });
-
-    const chapters = m.chapters || [];
+    // الفصول المحلية
     const chapterList = document.getElementById('chapter-list');
-    chapters.forEach(ch => {
-        const isRead = m.progress.readChapters.includes(String(ch.num));
-        const row = document.createElement('div');
-        row.className = 'chapter-row';
-        row.innerHTML = `
-            <span class="chapter-num">فصل ${ch.num}${ch.title ? ' — ' + escapeHtml(ch.title) : ''}</span>
-            <span class="read-check">${isRead ? '✓' : ''}</span>
-        `;
-        row.onclick = () => navigate('reader', { id, chapter: ch.num });
-        chapterList.appendChild(row);
-    });
-
-    document.getElementById('btn-continue-read').onclick = () => {
-        const next = m.progress.lastReadChapter
-            ? chapters.find(c => String(c.num) === String(m.progress.lastReadChapter))?.num
-            : chapters[0]?.num;
-        if (next != null) navigate('reader', { id, chapter: next });
-    };
-
-    const uploadForm = document.getElementById('form-upload-chapter');
-    uploadForm.onsubmit = async (e) => {
-        e.preventDefault();
-        const chapterNum = uploadForm.chapterNum.value;
-        const files = uploadForm.pages.files;
-        if (!files.length) return;
-        const btn    = document.getElementById('btn-upload-chapter');
-        const status = document.getElementById('upload-status');
-        btn.disabled = true;
-        status.textContent = `جاري رفع ${files.length} صفحة...`;
-
-        const fd = new FormData();
-        for (const f of files) fd.append('pages', f);
-
-        try {
-            const uploadRes = await fetch(`/api/manhwa/${id}/chapter/${chapterNum}/upload`, { method: 'POST', body: fd });
-            if (!uploadRes.ok) throw new Error((await uploadRes.json()).error);
-            const { jobKey } = await uploadRes.json();
-
-            while (true) {
-                await new Promise(r => setTimeout(r, 1500));
-                const job = await fetch(`/api/job/${jobKey}`).then(r => r.json());
-                if (job.status === 'done') {
-                    status.textContent = '✅ تمت المعالجة بنجاح!';
-                    setTimeout(() => navigate('detail', { id }), 800);
-                    break;
-                } else if (job.status === 'error') {
-                    throw new Error(job.error || 'فشلت المعالجة');
-                } else if (job.progress) {
-                    const { page, total, stage } = job.progress;
-                    status.textContent = `صفحة ${page}/${total} — ${stage === 'ocr' ? 'استخراج' : 'ترجمة'}...`;
-                }
-            }
-        } catch (err) {
-            status.textContent = '❌ ' + err.message;
-        } finally {
-            btn.disabled = false;
-        }
-    };
+    if (!chapters.length) {
+        chapterList.innerHTML = '<p class="empty-hint">لا توجد فصول بعد.</p>';
+    } else {
+        chapters.forEach(ch => {
+            const isRead = m.progress.readChapters.includes(String(ch.num));
+            const row = document.createElement('div');
+            row.className = 'chapter-row';
+            row.innerHTML = `
+                <span class="chapter-num">فصل ${ch.num}${ch.title ? ' — ' + escapeHtml(ch.title) : ''}</span>
+                <span class="read-check">${isRead ? '✓' : ''}</span>
+            `;
+            row.onclick = () => navigate('reader', { id, chapter: ch.num });
+            chapterList.appendChild(row);
+        });
+    }
 }
 
 // ============================================================
@@ -630,7 +713,6 @@ async function renderReader(id, chapterNum) {
                 const box = document.createElement('div');
                 box.className = 'text-overlay';
                 let [x0, y0, x1, y1] = normalizedBbox(block.bbox, page.width, page.height);
-                // Expand box by 2% on each side to better cover original text
                 const pad = 2;
                 const left = Math.max(0, x0 - pad);
                 const top  = Math.max(0, y0 - pad);
@@ -640,7 +722,6 @@ async function renderReader(id, chapterNum) {
                 box.style.top    = top  + '%';
                 box.style.width  = w    + '%';
                 box.style.height = h    + '%';
-                // Scale font based on box size — smaller boxes get smaller text
                 const boxWidthPx = (w / 100) * (wrap.offsetWidth || 360);
                 const fontSize = Math.max(9, Math.min(14, boxWidthPx / 8));
                 box.style.fontSize = fontSize + 'px';
@@ -699,6 +780,7 @@ async function renderProfile() {
     setActiveDrawer('profile');
     app.appendChild(tpl('profile'));
     const stats = await api('/profile');
+
     document.getElementById('stat-chapters').textContent  = stats.totalChaptersRead;
     document.getElementById('stat-manhwa').textContent    = stats.totalManhwa;
     document.getElementById('stat-fav').textContent       = stats.favoritesCount;
@@ -706,18 +788,81 @@ async function renderProfile() {
     document.getElementById('stat-later').textContent     = stats.readLaterCount;
     document.getElementById('stat-completed').textContent = stats.completedCount;
 
+    // عرض اسم المستخدم إذا كان مسجلاً
+    if (currentUser) {
+        const avatarEl = document.getElementById('profile-avatar');
+        const nameEl   = document.getElementById('profile-name');
+        const userEl   = document.getElementById('profile-username');
+        const editSec  = document.getElementById('profile-edit-section');
+        if (avatarEl) avatarEl.textContent = currentUser.avatarEmoji || '📖';
+        if (nameEl)   nameEl.textContent   = currentUser.username || 'قارئ';
+        if (userEl)   { userEl.textContent = `@${currentUser.username?.toLowerCase() || ''}`; userEl.style.display = ''; }
+        if (editSec)  editSec.style.display = '';
+
+        // حقل تعديل الاسم
+        const nameInput = document.getElementById('edit-display-name');
+        if (nameInput) nameInput.value = currentUser.username || '';
+
+        // أيقونات الإيموجي
+        const emojiOpts = document.getElementById('emoji-options');
+        if (emojiOpts) {
+            const emojis = ['📖', '📚', '🗡️', '⚔️', '🔥', '❄️', '🌙', '⭐', '👑', '🐉'];
+            emojiOpts.innerHTML = '';
+            let selectedEmoji = currentUser.avatarEmoji || '📖';
+            emojis.forEach(e => {
+                const span = document.createElement('span');
+                span.textContent = e;
+                if (e === selectedEmoji) span.classList.add('selected');
+                span.onclick = () => {
+                    emojiOpts.querySelectorAll('span').forEach(s => s.classList.remove('selected'));
+                    span.classList.add('selected');
+                    selectedEmoji = e;
+                };
+                emojiOpts.appendChild(span);
+            });
+
+            const saveBtn = document.getElementById('btn-save-profile');
+            if (saveBtn) {
+                saveBtn.onclick = async () => {
+                    const displayName = nameInput?.value?.trim();
+                    saveBtn.disabled = true;
+                    try {
+                        const result = await api('/profile/update', {
+                            method: 'POST',
+                            body: JSON.stringify({ displayName, avatarEmoji: selectedEmoji }),
+                        });
+                        currentUser.username   = result.displayName;
+                        currentUser.avatarEmoji = result.avatarEmoji;
+                        if (avatarEl) avatarEl.textContent = result.avatarEmoji;
+                        if (nameEl)   nameEl.textContent   = result.displayName;
+                        saveBtn.textContent = '✓ تم الحفظ';
+                        setTimeout(() => { saveBtn.textContent = 'حفظ التغييرات'; saveBtn.disabled = false; }, 1500);
+                    } catch (e) { saveBtn.disabled = false; alert(e.message); }
+                };
+            }
+        }
+    } else {
+        // لم يسجّل دخول — اعرض أزرار التسجيل
+        const regBtn  = document.getElementById('btn-register-link');
+        const loginBtn = document.getElementById('btn-user-login-link');
+        if (regBtn)   { regBtn.style.display   = ''; regBtn.onclick   = () => showLoginOverlay({ startTab: 'register' }); }
+        if (loginBtn) { loginBtn.style.display = ''; loginBtn.onclick = () => showLoginOverlay({ startTab: 'user' }); }
+    }
+
     document.getElementById('btn-logout').onclick = async () => {
         await fetch('/api/logout', { method: 'POST' });
         isAdmin = false;
-        const adminItem = document.getElementById('drawer-admin-item');
-        if (adminItem) adminItem.hidden = true;
+        currentUser = null;
+        updateAdminUI();
         location.reload();
     };
 
     if (!isAdmin) {
         const adminBtn = document.getElementById('btn-admin-login');
-        adminBtn.style.display = '';
-        adminBtn.onclick = () => showLoginOverlay(true);
+        if (adminBtn) {
+            adminBtn.style.display = '';
+            adminBtn.onclick = () => showLoginOverlay({ startTab: 'admin' });
+        }
     }
 }
 
@@ -772,7 +917,6 @@ async function renderAdmin() {
                         }),
                     });
                     btn.textContent = '✓ تمت الإضافة';
-                    // إذا يوجد فصول عربية، اعرض خيار التحميل الفوري
                     if (manga.hasAr) {
                         const dlBtn = document.createElement('button');
                         dlBtn.className = 'btn btn-blue';
@@ -804,7 +948,7 @@ async function renderAdmin() {
                         };
                         btn.parentElement.appendChild(dlBtn);
                     } else {
-                        navigate('detail', { id: manhwaId });
+                        navigate('admin-edit', { id: manhwaId });
                     }
                 };
                 mdxResults.appendChild(card);
@@ -828,8 +972,12 @@ async function renderAdmin() {
         row.innerHTML = `
             <img src="${m.coverUrl || placeholderCover()}" class="admin-lib-cover" alt="">
             <span class="admin-lib-title">${escapeHtml(m.title)}</span>
-            <button class="btn-danger" data-id="${escapeHtml(m.id)}">حذف</button>
+            <div class="admin-lib-actions">
+                <button class="btn-edit" data-id="${escapeHtml(m.id)}">تعديل</button>
+                <button class="btn-danger" data-id="${escapeHtml(m.id)}">حذف</button>
+            </div>
         `;
+        row.querySelector('.btn-edit').onclick = () => navigate('admin-edit', { id: m.id });
         row.querySelector('.btn-danger').onclick = async () => {
             if (!confirm(`حذف "${m.title}"؟`)) return;
             await api('/manhwa/' + m.id, { method: 'DELETE' });
@@ -851,7 +999,7 @@ async function renderAdmin() {
                 coverUrl: fd.get('coverUrl'), chapters: [],
             }),
         });
-        navigate('detail', { id });
+        navigate('admin-edit', { id });
     };
 
     document.getElementById('btn-save-admin-settings').onclick = async () => {
@@ -885,6 +1033,151 @@ async function renderAdmin() {
         document.getElementById('glossary-arabic').value = '';
         await loadGlossaryUI();
     };
+}
+
+// ============================================================
+//   صفحة تعديل عمل (للمدير)
+// ============================================================
+async function renderAdminEdit(id) {
+    const m = await api('/manhwa/' + id);
+    app.appendChild(tpl('admin-edit'));
+
+    document.getElementById('edit-back-btn').onclick = () => navigate('admin');
+
+    const coverPreview = document.getElementById('edit-cover-preview');
+    const titleInput   = document.getElementById('edit-title');
+    const descInput    = document.getElementById('edit-description');
+    const tagsInput    = document.getElementById('edit-tags');
+    const coverInput   = document.getElementById('edit-cover-url');
+
+    coverPreview.src    = m.coverUrl || placeholderCover();
+    titleInput.value    = m.title || '';
+    descInput.value     = m.description || '';
+    tagsInput.value     = (m.tags || []).join(', ');
+    coverInput.value    = m.coverUrl || '';
+
+    coverInput.addEventListener('input', () => {
+        if (coverInput.value) coverPreview.src = coverInput.value;
+    });
+
+    document.getElementById('btn-save-edit').onclick = async () => {
+        const btn = document.getElementById('btn-save-edit');
+        btn.disabled = true;
+        try {
+            await api('/manhwa', {
+                method: 'POST',
+                body: JSON.stringify({
+                    id,
+                    title:       titleInput.value.trim(),
+                    description: descInput.value.trim(),
+                    tags:        tagsInput.value.split(',').map(s => s.trim()).filter(Boolean),
+                    coverUrl:    coverInput.value.trim(),
+                }),
+            });
+            btn.textContent = '✓ تم الحفظ';
+            setTimeout(() => { btn.textContent = 'حفظ التغييرات'; btn.disabled = false; }, 1200);
+        } catch (e) { btn.disabled = false; alert(e.message); }
+    };
+
+    // رفع فصل جديد
+    const uploadForm = document.getElementById('form-upload-chapter');
+    if (uploadForm) {
+        uploadForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const chapterNum = uploadForm.chapterNum.value;
+            const files = uploadForm.pages.files;
+            if (!files.length) return;
+            const btn    = document.getElementById('btn-upload-chapter');
+            const status = document.getElementById('upload-status');
+            btn.disabled = true;
+            status.textContent = `جاري رفع ${files.length} صفحة...`;
+
+            const fd = new FormData();
+            for (const f of files) fd.append('pages', f);
+
+            try {
+                const uploadRes = await fetch(`/api/manhwa/${id}/chapter/${chapterNum}/upload`, { method: 'POST', body: fd });
+                if (!uploadRes.ok) throw new Error((await uploadRes.json()).error);
+                const { jobKey } = await uploadRes.json();
+
+                while (true) {
+                    await new Promise(r => setTimeout(r, 1500));
+                    const job = await fetch(`/api/job/${jobKey}`).then(r => r.json());
+                    if (job.status === 'done') {
+                        status.textContent = '✅ تمت المعالجة بنجاح!';
+                        setTimeout(() => navigate('detail', { id }), 800);
+                        break;
+                    } else if (job.status === 'error') {
+                        throw new Error(job.error || 'فشلت المعالجة');
+                    } else if (job.progress) {
+                        const { page, total, stage } = job.progress;
+                        status.textContent = `صفحة ${page}/${total} — ${stage === 'ocr' ? 'استخراج' : 'ترجمة'}...`;
+                    }
+                }
+            } catch (err) {
+                status.textContent = '❌ ' + err.message;
+            } finally {
+                btn.disabled = false;
+            }
+        };
+    }
+
+    // فصول MangaDex في صفحة التعديل
+    const mdxHint = document.getElementById('edit-mdx-hint');
+    const mdxChList = document.getElementById('edit-mdx-chapter-list');
+    if (m.mdxId && mdxChList) {
+        if (mdxHint) mdxHint.style.display = 'none';
+        mdxChList.style.display = '';
+        mdxChList.innerHTML = '<div class="loader"><div class="loader-ring"></div></div>';
+        try {
+            const mdxChapters = await api(`/mangadex/${m.mdxId}/chapters`);
+            mdxChList.innerHTML = '';
+            const existingNums = new Set((m.chapters || []).map(c => String(c.num)));
+            const lang = mdxChapters[0]?.lang || 'en';
+            const notDownloaded = mdxChapters.filter(ch => !existingNums.has(String(ch.num))).length;
+
+            if (notDownloaded > 0) {
+                const bulkBtn = document.createElement('button');
+                bulkBtn.className = 'btn btn-blue';
+                bulkBtn.style.cssText = 'margin-bottom:12px;width:100%';
+                bulkBtn.textContent = `⬇ تحميل ${notDownloaded} فصل ${lang === 'ar' ? '🇸🇦' : 'EN'}`;
+                bulkBtn.onclick = async () => {
+                    if (!confirm(`تحميل ${notDownloaded} فصل؟`)) return;
+                    bulkBtn.disabled = true;
+                    try {
+                        const { jobKey } = await api('/mangadex/download-all', {
+                            method: 'POST',
+                            body: JSON.stringify({ manhwaId: id, mdxId: m.mdxId }),
+                        });
+                        const poll = setInterval(async () => {
+                            const job = await fetch(`/api/job/${jobKey}`).then(r => r.json());
+                            if (job.status === 'done') {
+                                clearInterval(poll); bulkBtn.textContent = `✓ اكتمل`;
+                            } else if (job.status === 'error') {
+                                clearInterval(poll); bulkBtn.textContent = '❌ ' + job.error; bulkBtn.disabled = false;
+                            } else if (job.progress) {
+                                bulkBtn.textContent = `فصل ${job.progress.chapterNum}...`;
+                            }
+                        }, 2500);
+                    } catch (err) { bulkBtn.textContent = '❌ ' + err.message; bulkBtn.disabled = false; }
+                };
+                mdxChList.appendChild(bulkBtn);
+            }
+
+            mdxChapters.forEach(ch => {
+                const downloaded = existingNums.has(String(ch.num));
+                const row = document.createElement('div');
+                row.className = 'chapter-row';
+                row.innerHTML = `
+                    <span class="chapter-num">فصل ${ch.num}</span>
+                    <span>${downloaded ? '<span style="color:var(--gold)">✓ محمّل</span>' : '<span style="color:var(--text-muted)">غير محمّل</span>'}</span>
+                `;
+                mdxChList.appendChild(row);
+            });
+        } catch (e) {
+            if (mdxChList) mdxChList.innerHTML = `<p class="empty-hint">خطأ: ${escapeHtml(e.message)}</p>`;
+        }
+    }
 }
 
 async function loadGlossaryUI() {
@@ -937,11 +1230,12 @@ window.addEventListener('load', async () => {
         }
         const me = await res.json();
         isAdmin = me.isAdmin;
+        if (me.loggedIn && me.userId) {
+            currentUser = { userId: me.userId, username: me.username, avatarEmoji: me.avatarEmoji };
+        }
     } catch { isAdmin = false; }
 
-    const adminItem = document.getElementById('drawer-admin-item');
-    if (adminItem) adminItem.hidden = !isAdmin;
-
+    updateAdminUI();
     setActiveDrawer('home');
     routeFromHash();
     if (!location.hash) navigate('home');
