@@ -94,12 +94,36 @@
 <!-- ============ قوالب ============ -->
 
 <template id="tpl-home">
-    <div id="hero-section"></div>
+    <!-- Hero -->
+    <div id="home-hero-wrap"></div>
+
+    <!-- تابع القراءة -->
     <section id="continue-row" hidden>
-        <h2 class="section-title">تابع القراءة</h2>
+        <div class="home-sec-head">
+            <h2 class="home-sec-title">متابعة القراءة</h2>
+        </div>
         <div class="hscroll" id="continue-scroll"></div>
     </section>
+
+    <!-- شائع اليوم -->
+    <section id="home-popular-sec" hidden>
+        <div class="home-sec-head">
+            <h2 class="home-sec-title">🔥 شائع اليوم</h2>
+        </div>
+        <div class="home-popular-grid" id="home-popular-grid"></div>
+    </section>
+
+    <!-- أحدث الإصدارات -->
+    <section id="home-updates-sec" hidden>
+        <div class="home-sec-head">
+            <h2 class="home-sec-title">أحدث الإصدارات</h2>
+            <button class="home-sec-more" id="btn-home-view-all">عرض الكل</button>
+        </div>
+        <div id="home-updates-list"></div>
+    </section>
+
     <p class="home-empty-hint" id="home-empty" hidden>لا يوجد أي عمل — أضف أول عمل من لوحة الإدارة.</p>
+    <div style="height:30px"></div>
 </template>
 
 <template id="tpl-library-list">

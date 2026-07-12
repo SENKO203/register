@@ -1,7 +1,8 @@
 'use strict';
 const app = document.getElementById('app');
 let isAdmin = false;
-let currentUser = null; // { username, avatarEmoji, userId }
+let currentUser = null;
+let _skipHashChange = false; // منع التكرار من hashchange أثناء navigate()
 
 // ============================================================
 //   أدوات مساعدة
@@ -239,9 +240,11 @@ const topViews = ['home', 'library-list', 'my-library', 'profile', 'admin'];
 
 async function navigate(view, params = {}) {
     const hash = view + (params.id ? `/${params.id}` : '') + (params.chapter ? `/${params.chapter}` : '');
+    _skipHashChange = true;
     location.hash = hash;
     await render(view, params);
     window.scrollTo(0, 0);
+    _skipHashChange = false;
 }
 
 async function render(view, params) {
@@ -260,7 +263,7 @@ async function render(view, params) {
 }
 
 // ============================================================
-//   الرئيسية — Hero + تابع القراءة فقط
+//   الرئيسية — AZORA style: Hero + تابع القراءة + شائع اليوم + أحدث الإصدارات
 // ============================================================
 async function renderHome() {
     setActiveDrawer('home');
@@ -271,39 +274,85 @@ async function renderHome() {
         api('/progress-all'),
     ]);
 
-    const heroSection = document.getElementById('hero-section');
-    if (library.length) {
-        const featured = library[0];
-        const hero = document.createElement('div');
-        hero.className = 'hero';
-        hero.innerHTML = `
-            <img class="hero-bg" src="${featured.coverUrl || placeholderCover()}" alt="${escapeHtml(featured.title)}">
-            <div class="hero-overlay"></div>
-            <div class="hero-content">
-                <div class="hero-tags">${(featured.tags || []).slice(0,3).map(t => `<span class="hero-tag">${escapeHtml(t)}</span>`).join('')}</div>
-                <div class="hero-title">${escapeHtml(featured.title)}</div>
-                <button class="hero-btn" id="hero-read-btn">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4l12 8-12 8V4z"/></svg>
-                    ابدأ القراءة
-                </button>
-            </div>
-        `;
-        hero.querySelector('#hero-read-btn').onclick = () => navigate('detail', { id: featured.id });
-        heroSection.appendChild(hero);
-    } else {
+    // تنظيف التكرار من البيانات
+    const seenIds = new Set();
+    const unique = library.filter(m => { if (seenIds.has(m.id)) return false; seenIds.add(m.id); return true; });
+
+    if (!unique.length) {
         document.getElementById('home-empty').hidden = false;
         return;
     }
 
-    const inProgress = library.filter(m => allProgress[m.id]?.lastReadChapter);
+    // ── Hero ──
+    const featured = unique[0];
+    const ftags    = (featured.tags || []).slice(0, 3);
+    const ftypeLabel = ftags.some(t => /رواية|novel/i.test(t)) ? 'رواية' : 'مانهوا';
+    const hero = document.createElement('div');
+    hero.className = 'hero';
+    hero.innerHTML = `
+        <img class="hero-bg" src="${featured.coverUrl || placeholderCover()}" alt="${escapeHtml(featured.title)}">
+        <div class="hero-overlay"></div>
+        <span class="hero-badge-type">${ftypeLabel}</span>
+        <div class="hero-content">
+            <div class="hero-tags">${ftags.map(t => `<span class="hero-tag">${escapeHtml(t)}</span>`).join('')}</div>
+            <div class="hero-title">${escapeHtml(featured.title)}</div>
+            <button class="hero-btn" id="hero-read-btn">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4l12 8-12 8V4z"/></svg>
+                ابدأ القراءة
+            </button>
+        </div>
+    `;
+    hero.querySelector('#hero-read-btn').onclick = () => navigate('detail', { id: featured.id });
+    document.getElementById('home-hero-wrap').appendChild(hero);
+
+    // ── تابع القراءة ──
+    const inProgress = unique.filter(m => allProgress[m.id]?.lastReadChapter);
     if (inProgress.length) {
         document.getElementById('continue-row').hidden = false;
         const scroll = document.getElementById('continue-scroll');
-        const seen = new Set();
-        inProgress.forEach(m => {
-            if (seen.has(m.id)) return;
-            seen.add(m.id);
-            scroll.appendChild(buildCard(m, allProgress[m.id]));
+        inProgress.forEach(m => scroll.appendChild(buildCard(m, allProgress[m.id])));
+    }
+
+    // ── شائع اليوم — أول 6 أعمال في شبكة 2 عمود ──
+    const popularItems = unique.slice(0, 6);
+    if (popularItems.length) {
+        document.getElementById('home-popular-sec').hidden = false;
+        const grid = document.getElementById('home-popular-grid');
+        popularItems.forEach(m => {
+            const tl = (m.tags || []).some(t => /رواية|novel/i.test(t)) ? 'رواية' : 'مانهوا';
+            const card = document.createElement('div');
+            card.className = 'home-pop-card';
+            card.innerHTML = `
+                <img src="${m.coverUrl || placeholderCover()}" alt="${escapeHtml(m.title)}" loading="lazy">
+                <div class="home-pop-overlay"></div>
+                <span class="home-pop-badge">${tl}</span>
+                <div class="home-pop-title">${escapeHtml(m.title)}</div>
+            `;
+            card.onclick = () => navigate('detail', { id: m.id });
+            grid.appendChild(card);
+        });
+    }
+
+    // ── أحدث الإصدارات — أعمال لها فصول ──
+    const withChapters = unique.filter(m => m.chapters?.length > 0);
+    if (withChapters.length) {
+        document.getElementById('home-updates-sec').hidden = false;
+        document.getElementById('btn-home-view-all').onclick = () => navigate('library-list');
+        const list = document.getElementById('home-updates-list');
+        withChapters.slice(0, 12).forEach(m => {
+            const latestCh = m.chapters[m.chapters.length - 1];
+            const row = document.createElement('div');
+            row.className = 'home-update-row';
+            row.innerHTML = `
+                <img class="home-update-thumb" src="${m.coverUrl || placeholderCover()}" alt="" loading="lazy">
+                <div class="home-update-info">
+                    <div class="home-update-title">${escapeHtml(m.title)}</div>
+                    <div class="home-update-ch">الفصل ${latestCh.num}${latestCh.title ? ' — ' + escapeHtml(latestCh.title) : ''}</div>
+                    <span class="home-update-free">مجاني</span>
+                </div>
+            `;
+            row.onclick = () => navigate('detail', { id: m.id });
+            list.appendChild(row);
         });
     }
 }
@@ -1354,6 +1403,7 @@ async function loadGlossaryUI() {
 //   بدء التشغيل + التوجيه
 // ============================================================
 function routeFromHash() {
+    if (_skipHashChange) return;
     const parts = location.hash.replace('#', '').split('/').filter(Boolean);
     const [view, id, chapter] = parts;
     const v = view || 'home';

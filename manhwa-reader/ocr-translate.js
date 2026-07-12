@@ -48,32 +48,37 @@ async function callGroqVision(imagePath, glossary, config) {
     const glossaryText = Object.entries(glossary)
         .map(([k, v]) => `${k} → ${v}`).join('\n');
 
-    const prompt = `هذه صفحة من مانهوا/مانجا (كوميكس آسيوي).
-مهمتك: اكتشف كل فقاعات الكلام والنصوص وترجمها إلى العربية.
+    const prompt = `You are a professional manga/manhwa scanlation translator. Analyze this page and return every text bubble with precise coordinates and a high-quality Arabic translation.
 
-لكل فقاعة/نص، أعطني الحقول التالية:
-- type: نوع الفقاعة — "speech" (فقاعة كلام بيضاء دائرية/بيضاوية) | "thought" (فقاعة تفكير بخطوط منقطة أو سحابية) | "narration" (صندوق سرد مستطيل) | "sfx" (مؤثر صوتي مرسوم كبير)
-- x, y: موضع الزاوية العلوية اليسرى للمنطقة البيضاء/الفارغة للفقاعة كاملة (0-100 نسبة مئوية من الصورة)
-- w, h: عرض وارتفاع منطقة الفقاعة كاملة (0-100 نسبة مئوية) — اشمل المنطقة البيضاء كلها ليس فقط الحروف
-- original: النص الأصلي كما هو في الصورة
-- translated: الترجمة العربية
+FIELDS per bubble:
+- type: "speech" (oval/round white bubble with tail) | "thought" (cloud/dotted bubble) | "narration" (rectangular strip, usually top/bottom of panel) | "sfx" (large decorative sound art)
+- x, y: top-left corner of the white bubble area as integer % of image (0-100)
+- w, h: width and height of that white bubble only as integer % — NOT the surrounding artwork
+- original: exact source text
+- translated: high-quality Arabic translation
 
-مثال: فقاعة بيضاء تمتد من Y=8% إلى Y=22% ومن X=12% إلى X=48% → type:"speech", x:12, y:8, w:36, h:14
+COORDINATE PRECISION — critical:
+• Measure the white/pale bubble shape ONLY, not the panel around it
+• Typical speech bubble: w=12–42, h=6–28 (small ovals)
+• Typical narration box: w=55–90, h=4–16 (wide & short strip)
+• Typical SFX: w=8–35, h=5–22
+• REJECT any bubble with w>68 or h>48 — re-examine and correct
+• Each bubble is independent; one text = one small bubble, not the whole panel
 
-${glossaryText ? `قاموس مصطلحات ثابت (لا تغير هذه الأسماء والمصطلحات):\n${glossaryText}\n` : ''}
-قواعد الترجمة:
-• اكتب عربية طبيعية سلسة تناسب أسلوب المانهوا وعمر الشخصية
-• صراخ/غضب شديد → أضف ! أو !! في النهاية
-• همس/تفكير داخلي → ضع النص بين قوسين ()
-• مؤثرات صوتية (أصوات طعام، ضربات، انفجارات) → ترجم المعنى
-• أسماء الشخصيات → نقحرة عربية تتوافق مع نطقها الأصلي
-• النصوص الإنجليزية → ترجمها للعربية أيضاً
-• إذا كان النص اسماً تجارياً أو اسم عمل → أبقه كما هو
+ARABIC TRANSLATION RULES:
+• Write natural flowing Arabic as a native speaker would — NO literal translation
+• Match personality & emotion: angry character → strong forceful Arabic; shy → soft gentle
+• Shouting/rage → end with ! or !!
+• Inner thought/whisper → wrap in parentheses ()
+• SFX → translate the feeling/sound (BOOM → فجوووم | CRACK → طقططق | THUD → دووووم | sigh → *تنهيدة*)
+• English text → translate fully to Arabic
+• Brand/work titles → keep original
+• Character names → established Arabic form or phonetic transliteration
+${glossaryText ? `\nFIXED TERMS (never change):\n${glossaryText}\n` : ''}
+Return ONLY this JSON format, nothing else:
+{"blocks":[{"type":"speech","x":15,"y":8,"w":25,"h":12,"original":"source text","translated":"الترجمة"}]}
 
-أعد JSON فقط بهذا الشكل وبدون أي نص آخر:
-{"blocks":[{"type":"speech","x":12,"y":8,"w":36,"h":14,"original":"النص الأصلي","translated":"الترجمة العربية"}]}
-
-إذا لم يوجد أي نص في الصورة أعد: {"blocks":[]}`;
+No text found → {"blocks":[]}`;
 
     const body = JSON.stringify({
         model,
@@ -149,9 +154,22 @@ async function processChapterImages(manhwaId, chapterNum, imagePaths, onProgress
             visionResult = { blocks: [] };
         }
 
-        // تحويل النسب المئوية إلى بكسل + حفظ النوع
+        // تحويل النسب المئوية إلى بكسل + فلترة الإحداثيات غير المنطقية
         const textBlocks = (visionResult.blocks || [])
-            .filter(b => b.original && b.original.trim())
+            .filter(b => {
+                if (!b.original || !b.original.trim()) return false;
+                const t = b.type || 'speech';
+                // رفض الفقاعات الضخمة جداً — Groq يخطئ أحياناً ويعطي مساحة الصفحة كلها
+                if (t === 'narration') {
+                    if ((b.h || 0) > 30) return false; // narration مستطيل قصير دائماً
+                } else if (t === 'sfx') {
+                    if ((b.w || 0) > 50 || (b.h || 0) > 40) return false;
+                } else {
+                    // speech / thought
+                    if ((b.w || 0) > 68 || (b.h || 0) > 55) return false;
+                }
+                return true;
+            })
             .map(b => ({
                 bbox: {
                     x0: Math.round(Math.max(0, b.x / 100) * width),
