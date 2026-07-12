@@ -17,7 +17,7 @@
             <svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
         </button>
     </div>
-    <div class="header-logo">MEDOSA</div>
+    <div class="header-logo">MED<span class="logo-accent">O</span>SA</div>
     <div class="header-icons">
         <button class="hbtn" id="btn-header-profile" aria-label="حسابي">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
@@ -30,7 +30,7 @@
 <nav class="drawer" id="drawer" aria-label="قائمة التنقل">
     <div class="drawer-head">
         <button class="drawer-close" id="btn-close-drawer" aria-label="إغلاق">✕</button>
-        <div class="drawer-logo">MEDOSA</div>
+        <div class="drawer-logo">MED<span class="logo-accent">O</span>SA</div>
     </div>
     <ul class="drawer-nav">
         <li>
@@ -134,20 +134,23 @@
         <button class="icon-btn back-btn" id="btn-back">
             <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
+        <div class="detail-hero-bottom">
+            <h1 class="detail-title" id="detail-title"></h1>
+            <div class="tag-row" id="detail-tags"></div>
+            <div class="action-row">
+                <button class="btn btn-blue" id="btn-add-list">
+                    <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                    إضافة للمفضلة
+                </button>
+                <button class="btn btn-primary" id="btn-continue-read">
+                    <svg viewBox="0 0 24 24"><path d="M6 4l12 8-12 8V4z"/></svg>
+                    اقرأ الآن
+                </button>
+            </div>
+        </div>
     </div>
     <div class="detail-body">
-        <h1 class="detail-title" id="detail-title"></h1>
-        <div class="tag-row" id="detail-tags"></div>
         <p class="detail-desc" id="detail-desc"></p>
-        <div class="action-row">
-            <button class="btn btn-primary" id="btn-continue-read">
-                <svg viewBox="0 0 24 24"><path d="M6 4l12 8-12 8V4z"/></svg>
-                متابعة القراءة
-            </button>
-            <button class="icon-toggle" id="btn-add-list" title="أضف للمكتبة">
-                <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-            </button>
-        </div>
         <div id="admin-upload-section" hidden>
         <h2 class="section-title">إضافة فصل جديد</h2>
         <form class="form" id="form-upload-chapter">

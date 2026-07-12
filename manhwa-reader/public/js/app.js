@@ -42,7 +42,7 @@ function showLoginOverlay(isAdminMode = false) {
     overlay.className = 'login-overlay';
     overlay.innerHTML = `
         <div class="login-box">
-            <div class="login-logo">MEDOSA</div>
+            <div class="login-logo">MED<span class="logo-accent">O</span>SA</div>
             <p class="login-hint">${isAdminMode ? 'كلمة مرور المدير' : 'أدخل كلمة المرور للدخول'}</p>
             <input type="password" class="login-input" id="login-pw" placeholder="كلمة المرور" autocomplete="current-password">
             <button class="btn btn-primary login-btn" id="login-submit">${isAdminMode ? 'دخول كمدير' : 'دخول'}</button>
@@ -142,6 +142,7 @@ async function navigate(view, params = {}) {
 
 async function render(view, params) {
     app.innerHTML = '';
+    document.body.classList.remove('detail-page');
     pageTransition();
     if (view === 'home')         return renderHome();
     if (view === 'library-list') return renderLibraryList();
