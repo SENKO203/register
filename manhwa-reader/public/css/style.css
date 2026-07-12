@@ -583,62 +583,101 @@ svg {
 
 /* ===================== قائمة المانجا (list view) ===================== */
 .lib-list-head {
-    padding: 24px 18px 16px;
-    border-bottom: 1px solid rgba(255,255,255,.06);
-    margin-bottom: 4px;
+    padding: 28px 18px 8px;
+    text-align: center;
 }
 .lib-list-title {
-    font-size: 22px; font-weight: 900;
-    background: linear-gradient(90deg, var(--red-bright), var(--red), var(--red-bright));
-    background-size: 200% auto;
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-    animation: goldShimmer 5s linear infinite;
+    font-size: 26px; font-weight: 900; color: var(--text);
+    margin-bottom: 6px;
 }
 .lib-list-sub { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
 
-.lib-list-grid { display: flex; flex-direction: column; gap: 10px; padding: 10px 18px; }
+/* Search bar */
+.lib-search-wrap { padding: 14px 18px 10px; }
+.lib-search-bar {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border-radius: 50px;
+    padding: 12px 18px;
+    border: 1px solid rgba(255,255,255,.08);
+}
+.lib-search-bar svg { width: 18px; height: 18px; color: var(--text-muted); flex-shrink: 0; }
+.lib-search-bar input {
+    flex: 1; background: none; border: none; color: var(--text);
+    font-family: inherit; font-size: 14px; text-align: right;
+}
+.lib-search-bar input::placeholder { color: var(--text-muted); }
+.lib-search-bar input:focus { outline: none; }
 
+.lib-list-grid { display: flex; flex-direction: column; gap: 10px; padding: 6px 18px 16px; }
+
+/* AZORA-style card */
 .list-card {
-    display: flex; align-items: center; gap: 14px;
+    display: flex; align-items: stretch;
     background: var(--surface); border-radius: var(--radius);
-    padding: 12px 14px; cursor: pointer;
-    border: 1px solid rgba(255,255,255,.04);
-    transition: background .2s, border-color .2s, transform .15s;
-    position: relative;
+    overflow: hidden; cursor: pointer;
+    border: 1px solid rgba(255,255,255,.06);
+    transition: border-color .2s, transform .15s;
+    position: relative; min-height: 140px;
 }
 .list-card:hover {
-    background: var(--surface-2);
-    border-color: rgba(229,57,53,.28);
-    transform: translateX(-3px);
+    border-color: rgba(229,57,53,.25);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(0,0,0,.4);
+}
+.list-card-body {
+    flex: 1; padding: 14px 14px 12px 10px;
+    display: flex; flex-direction: column; gap: 5px; min-width: 0;
+}
+.list-card-title {
+    font-size: 14px; font-weight: 700; line-height: 1.35;
+    display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+    margin-bottom: 2px;
+}
+.list-card-status {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--text-muted);
+}
+.status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #4caf50; flex-shrink: 0;
+}
+.list-card-rating { color: #ffc107; font-size: 12px; margin-right: auto; }
+.list-card-chapters-inner {
+    display: flex; flex-direction: column; gap: 4px; margin-top: 2px; flex: 1;
+}
+.lcc-row {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface-2); border-radius: 8px;
+    padding: 6px 10px; font-size: 12px;
+}
+.lcc-num { font-weight: 600; color: var(--text); }
+.lcc-badge { color: var(--red); font-size: 11px; }
+.lcc-read { color: var(--text-muted); font-size: 11px; }
+
+/* Cover on right */
+.list-card-cover-wrap {
+    position: relative; flex-shrink: 0; width: 110px;
 }
 .list-card-cover {
-    width: 54px; height: 76px; object-fit: cover;
-    border-radius: 8px; flex-shrink: 0;
-    box-shadow: 0 3px 12px rgba(0,0,0,.4);
+    width: 100%; height: 100%; object-fit: cover;
 }
-.list-card-body { flex: 1; min-width: 0; }
-.list-card-title {
-    font-size: 15px; font-weight: 700;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    margin-bottom: 6px;
+.list-card-type {
+    position: absolute; top: 0; left: 0;
+    background: #e91e8c; color: #fff;
+    font-size: 10px; font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 0 0 10px 0;
 }
-.list-card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
-.list-card-tags .tag-chip { font-size: 10px; padding: 2px 10px; }
-.list-card-meta {
-    font-size: 12px; color: var(--text-muted);
-    display: flex; gap: 10px;
-}
-.list-card-read { color: var(--red); }
+.list-card-type.novel { background: #3f51b5; }
+.list-card-type.manhwa { background: #e91e8c; }
+
+/* Progress bar (for my-library) */
 .list-card-bar {
-    margin-top: 6px; height: 3px; border-radius: 2px;
+    margin-top: 4px; height: 3px; border-radius: 2px;
     background: rgba(255,255,255,.08); overflow: hidden;
 }
 .list-card-fill { height: 100%; background: var(--red); border-radius: 2px; }
-.list-card-arrow {
-    width: 18px; height: 18px; flex-shrink: 0;
-    color: var(--text-muted); stroke: currentColor;
-    fill: none; stroke-width: 2;
-}
 
 /* ===================== لوحة الإدارة ===================== */
 .admin-lib-list { display: flex; flex-direction: column; gap: 8px; padding: 0 18px; }

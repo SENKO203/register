@@ -221,6 +221,45 @@ function buildCard(m, progress) {
 // ============================================================
 //   قائمة المانجا (كل الأعمال)
 // ============================================================
+function buildAzoraCard(m, progress, showProgress = false) {
+    const readCount = progress?.readChapters?.length || 0;
+    const total     = m.chapters?.length || 0;
+    const pct       = total ? Math.round((readCount / total) * 100) : 0;
+    const chapters  = (m.chapters || []).slice(-4).reverse();
+    const tags      = m.tags || [];
+    const typeLabel = tags.some(t => /رواية|novel/i.test(t)) ? 'رواية' : 'مانهوا';
+    const typeClass = typeLabel === 'رواية' ? 'novel' : 'manhwa';
+
+    const chapRows = chapters.length
+        ? chapters.map(ch => {
+            const isRead = progress?.readChapters?.includes(String(ch.num));
+            return `<div class="lcc-row">
+                <span class="lcc-num">الفصل ${ch.num}</span>
+                ${isRead
+                    ? `<span class="lcc-read">✓ مقروء</span>`
+                    : `<span class="lcc-badge">🔥 جديد</span>`}
+            </div>`;
+        }).join('')
+        : `<div class="lcc-row"><span class="lcc-num" style="color:var(--text-muted)">لا توجد فصول بعد</span></div>`;
+
+    return `
+        <div class="list-card-body">
+            <div class="list-card-title">${escapeHtml(m.title)}</div>
+            <div class="list-card-status">
+                <span class="status-dot"></span>
+                <span>مستمر</span>
+                <span class="list-card-rating">⭐ ${total}</span>
+            </div>
+            <div class="list-card-chapters-inner">${chapRows}</div>
+            ${showProgress && total ? `<div class="list-card-bar"><div class="list-card-fill" style="width:${pct}%"></div></div>` : ''}
+        </div>
+        <div class="list-card-cover-wrap">
+            <img class="list-card-cover" src="${m.coverUrl || placeholderCover()}" alt="${escapeHtml(m.title)}" loading="lazy">
+            <span class="list-card-type ${typeClass}">${typeLabel}</span>
+        </div>
+    `;
+}
+
 async function renderLibraryList() {
     setActiveDrawer('library-list');
     app.appendChild(tpl('library-list'));
@@ -230,39 +269,35 @@ async function renderLibraryList() {
         api('/progress-all'),
     ]);
 
-    const countEl = document.getElementById('lib-list-count');
-    const grid    = document.getElementById('lib-list-grid');
-    const empty   = document.getElementById('lib-list-empty');
+    const countEl  = document.getElementById('lib-list-count');
+    const grid     = document.getElementById('lib-list-grid');
+    const empty    = document.getElementById('lib-list-empty');
+    const searchEl = document.getElementById('lib-search-input');
 
     const seenIds = new Set();
     const unique  = library.filter(m => { if (seenIds.has(m.id)) return false; seenIds.add(m.id); return true; });
 
-    countEl.textContent = `${unique.length} عمل`;
+    countEl.textContent = `تم العثور على ${unique.length} عمل`;
     empty.hidden = unique.length > 0;
 
-    unique.forEach(m => {
-        const progress  = allProgress[m.id];
-        const readCount = progress?.readChapters?.length || 0;
-        const total     = m.chapters?.length || 0;
-        const pct       = total ? Math.round((readCount / total) * 100) : 0;
+    function renderCards(items) {
+        grid.innerHTML = '';
+        empty.hidden = items.length > 0;
+        if (!items.length) { empty.textContent = 'لا توجد نتائج.'; return; }
+        items.forEach(m => {
+            const row = document.createElement('div');
+            row.className = 'list-card';
+            row.innerHTML = buildAzoraCard(m, allProgress[m.id], false);
+            row.onclick = () => navigate('detail', { id: m.id });
+            grid.appendChild(row);
+        });
+    }
 
-        const row = document.createElement('div');
-        row.className = 'list-card';
-        row.innerHTML = `
-            <img class="list-card-cover" src="${m.coverUrl || placeholderCover()}" alt="${escapeHtml(m.title)}" loading="lazy">
-            <div class="list-card-body">
-                <div class="list-card-title">${escapeHtml(m.title)}</div>
-                <div class="list-card-tags">${(m.tags || []).slice(0,3).map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>
-                <div class="list-card-meta">
-                    <span>${total} فصل</span>
-                    ${readCount ? `<span class="list-card-read">${readCount} مقروء</span>` : ''}
-                </div>
-                ${total ? `<div class="list-card-bar"><div class="list-card-fill" style="width:${pct}%"></div></div>` : ''}
-            </div>
-            <svg class="list-card-arrow" viewBox="0 0 24 24"><path d="M9 6l-6 6 6 6"/></svg>
-        `;
-        row.onclick = () => navigate('detail', { id: m.id });
-        grid.appendChild(row);
+    renderCards(unique);
+
+    searchEl.addEventListener('input', () => {
+        const q = searchEl.value.trim().toLowerCase();
+        renderCards(q ? unique.filter(m => m.title.toLowerCase().includes(q)) : unique);
     });
 }
 
@@ -309,26 +344,9 @@ async function renderMyLibrary(listName = 'favorites') {
     }
 
     items.forEach(m => {
-        const progress  = allProgress[m.id];
-        const readCount = progress?.readChapters?.length || 0;
-        const total     = m.chapters?.length || 0;
-        const pct       = total ? Math.round((readCount / total) * 100) : 0;
-
         const row = document.createElement('div');
         row.className = 'list-card';
-        row.innerHTML = `
-            <img class="list-card-cover" src="${m.coverUrl || placeholderCover()}" alt="${escapeHtml(m.title)}" loading="lazy">
-            <div class="list-card-body">
-                <div class="list-card-title">${escapeHtml(m.title)}</div>
-                <div class="list-card-tags">${(m.tags || []).slice(0,3).map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>
-                <div class="list-card-meta">
-                    <span>${total} فصل</span>
-                    ${readCount ? `<span class="list-card-read">${readCount} مقروء</span>` : ''}
-                </div>
-                ${total ? `<div class="list-card-bar"><div class="list-card-fill" style="width:${pct}%"></div></div>` : ''}
-            </div>
-            <svg class="list-card-arrow" viewBox="0 0 24 24"><path d="M9 6l-6 6 6 6"/></svg>
-        `;
+        row.innerHTML = buildAzoraCard(m, allProgress[m.id], true);
         row.onclick = () => navigate('detail', { id: m.id });
         grid.appendChild(row);
     });

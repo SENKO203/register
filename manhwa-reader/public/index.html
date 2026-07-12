@@ -107,8 +107,14 @@
 
 <template id="tpl-library-list">
     <div class="lib-list-head">
-        <h1 class="lib-list-title">قائمة المانجا</h1>
+        <h1 class="lib-list-title">الأعمال 📚</h1>
         <p class="lib-list-sub" id="lib-list-count"></p>
+    </div>
+    <div class="lib-search-wrap">
+        <div class="lib-search-bar">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input type="text" id="lib-search-input" placeholder="البحث عن عمل...">
+        </div>
     </div>
     <div class="lib-list-grid" id="lib-list-grid"></div>
     <p class="empty-hint" id="lib-list-empty" hidden>لا توجد أعمال في المكتبة بعد.</p>
