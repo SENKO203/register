@@ -49,6 +49,21 @@ function requireAdmin(req, res, next) {
     if (!req.isAdmin) return res.status(403).json({ error: 'للمدير فقط' });
     next();
 }
+
+// ترقية تلقائية: إذا كانت كلمة سر المدير والقراء نفس الشيء، نفصلهما
+// (يحدث عند أول إعداد قبل تحديث النظام)
+(function migrateAuth() {
+    try {
+        const auth = getAuthConfig();
+        if (auth.adminPasswordHash && auth.passwordHash
+            && auth.salt && auth.adminSalt === auth.salt) {
+            const updated = { ...auth, passwordHash: null, salt: null };
+            fs.writeFileSync(AUTH_CONFIG_PATH, JSON.stringify(updated, null, 2));
+            console.log('[MEDOSA] تم فصل كلمة مرور المدير عن القراء — الموقع مفتوح للقراءة الآن');
+        }
+    } catch {}
+})();
+
 app.use(requireAuth);
 
 app.post('/api/login', (req, res) => {

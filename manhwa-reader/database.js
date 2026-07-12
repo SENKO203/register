@@ -35,7 +35,14 @@ function getLibrary() { return load(FILES.LIBRARY); }
 function getManhwa(id) { return getLibrary()[id] || null; }
 function upsertManhwa(id, meta) {
     const lib = getLibrary();
-    lib[id] = { ...(lib[id] || {}), ...meta, id };
+    const merged = { ...(lib[id] || {}), ...meta, id };
+    // Deduplicate chapters by num, keeping the last (most recent) version
+    if (Array.isArray(merged.chapters)) {
+        const map = new Map();
+        for (const ch of merged.chapters) map.set(String(ch.num), ch);
+        merged.chapters = [...map.values()].sort((a, b) => Number(a.num) - Number(b.num));
+    }
+    lib[id] = merged;
     save(FILES.LIBRARY, lib);
     return lib[id];
 }

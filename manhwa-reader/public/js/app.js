@@ -586,16 +586,29 @@ async function renderReader(id, chapterNum) {
             wrap.className = 'reader-page';
             const img = document.createElement('img');
             img.src = page.imageUrl;
+            img.loading = 'lazy';
             wrap.appendChild(img);
             (page.textBlocks || []).forEach(block => {
+                const text = showOriginal ? block.original : block.translated;
+                if (!text) return;
                 const box = document.createElement('div');
                 box.className = 'text-overlay';
-                const [x0, y0, x1, y1] = normalizedBbox(block.bbox, page.width, page.height);
-                box.style.left   = x0 + '%';
-                box.style.top    = y0 + '%';
-                box.style.width  = (x1 - x0) + '%';
-                box.style.height = (y1 - y0) + '%';
-                box.textContent  = showOriginal ? block.original : block.translated;
+                let [x0, y0, x1, y1] = normalizedBbox(block.bbox, page.width, page.height);
+                // Expand box by 2% on each side to better cover original text
+                const pad = 2;
+                const left = Math.max(0, x0 - pad);
+                const top  = Math.max(0, y0 - pad);
+                const w    = Math.min(100 - left, (x1 - x0) + pad * 2);
+                const h    = Math.min(100 - top,  (y1 - y0) + pad * 2);
+                box.style.left   = left + '%';
+                box.style.top    = top  + '%';
+                box.style.width  = w    + '%';
+                box.style.height = h    + '%';
+                // Scale font based on box size — smaller boxes get smaller text
+                const boxWidthPx = (w / 100) * (wrap.offsetWidth || 360);
+                const fontSize = Math.max(9, Math.min(14, boxWidthPx / 8));
+                box.style.fontSize = fontSize + 'px';
+                box.textContent  = text;
                 wrap.appendChild(box);
             });
             scroll.appendChild(wrap);
