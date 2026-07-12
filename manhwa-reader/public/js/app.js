@@ -433,6 +433,42 @@ async function renderDetail(id) {
                 if (!mdxChapters.length) {
                     mdxList.innerHTML = '<p class="empty-hint">لا توجد فصول على MangaDex.</p>';
                 } else {
+                    // زر التحميل الجماعي في الأعلى
+                    const lang = mdxChapters[0]?.lang || 'en';
+                    const bulkBtn = document.createElement('button');
+                    bulkBtn.className = 'btn btn-blue';
+                    bulkBtn.style.cssText = 'margin-bottom:12px;width:100%';
+                    const notDownloaded = mdxChapters.filter(ch => !existingNums.has(String(ch.num))).length;
+                    bulkBtn.textContent = `⬇ تحميل جميع الفصول (${notDownloaded} فصل ${lang === 'ar' ? '🇸🇦' : 'EN'})`;
+                    bulkBtn.onclick = async () => {
+                        if (!confirm(`سيتم تحميل ${notDownloaded} فصل — قد يستغرق وقتاً. هل تريد المتابعة؟`)) return;
+                        bulkBtn.disabled = true;
+                        bulkBtn.textContent = 'جاري التحميل...';
+                        try {
+                            const { jobKey } = await api('/mangadex/download-all', {
+                                method: 'POST',
+                                body: JSON.stringify({ manhwaId: id, mdxId: m.mdxId }),
+                            });
+                            const poll = setInterval(async () => {
+                                const job = await fetch(`/api/job/${jobKey}`).then(r => r.json());
+                                if (job.status === 'done') {
+                                    clearInterval(poll);
+                                    bulkBtn.textContent = `✓ اكتمل تحميل ${job.done} فصل`;
+                                    setTimeout(() => navigate('detail', { id }), 1500);
+                                } else if (job.status === 'error') {
+                                    clearInterval(poll);
+                                    bulkBtn.textContent = '❌ ' + job.error;
+                                    bulkBtn.disabled = false;
+                                } else if (job.progress) {
+                                    bulkBtn.textContent = `⬇ فصل ${job.progress.chapterNum} (${job.progress.page}/${job.progress.total})...`;
+                                }
+                            }, 2500);
+                        } catch (err) {
+                            bulkBtn.textContent = '❌ ' + err.message;
+                            bulkBtn.disabled = false;
+                        }
+                    };
+                    mdxList.appendChild(bulkBtn);
                     mdxChapters.forEach(ch => {
                         const downloaded = existingNums.has(String(ch.num));
                         const isAr = ch.lang === 'ar';
@@ -720,7 +756,7 @@ async function renderAdmin() {
                             ${manga.hasAr ? '<span style="margin-right:6px;padding:2px 7px;border-radius:20px;background:#1565c0;color:#fff;font-size:10px">🇸🇦 عربي</span>' : ''}
                         </div>
                         <div class="mdx-tags">${manga.tags.map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>
-                        <button class="btn btn-primary mdx-add-btn" style="margin-top:8px;font-size:12px;padding:8px 14px">+ إضافة للمكتبة</button>
+                        <button class="btn btn-primary mdx-add-btn" style="margin-top:8px;font-size:12px;padding:8px 14px">+ إضافة للموقع</button>
                     </div>
                 `;
                 card.querySelector('.mdx-add-btn').onclick = async (e) => {
@@ -735,7 +771,41 @@ async function renderAdmin() {
                             coverUrl: manga.cover || '', tags: manga.tags, mdxId: manga.id, chapters: [],
                         }),
                     });
-                    navigate('detail', { id: manhwaId });
+                    btn.textContent = '✓ تمت الإضافة';
+                    // إذا يوجد فصول عربية، اعرض خيار التحميل الفوري
+                    if (manga.hasAr) {
+                        const dlBtn = document.createElement('button');
+                        dlBtn.className = 'btn btn-blue';
+                        dlBtn.style.cssText = 'margin-top:6px;font-size:11px;padding:7px 12px;width:100%';
+                        dlBtn.textContent = '⬇ تحميل الفصول العربية الآن';
+                        dlBtn.onclick = async () => {
+                            dlBtn.disabled = true;
+                            dlBtn.textContent = 'جاري التحميل...';
+                            try {
+                                const { jobKey } = await api('/mangadex/download-all', {
+                                    method: 'POST',
+                                    body: JSON.stringify({ manhwaId, mdxId: manga.id }),
+                                });
+                                const poll = setInterval(async () => {
+                                    const job = await fetch(`/api/job/${jobKey}`).then(r => r.json());
+                                    if (job.status === 'done') {
+                                        clearInterval(poll);
+                                        dlBtn.textContent = `✓ تم تحميل ${job.done} فصل`;
+                                    } else if (job.status === 'error') {
+                                        clearInterval(poll);
+                                        dlBtn.textContent = '❌ ' + job.error;
+                                    } else if (job.progress) {
+                                        dlBtn.textContent = `تحميل فصل ${job.progress.chapterNum} (${job.progress.page}/${job.progress.total})...`;
+                                    }
+                                }, 2000);
+                            } catch (err) {
+                                dlBtn.textContent = '❌ ' + err.message;
+                            }
+                        };
+                        btn.parentElement.appendChild(dlBtn);
+                    } else {
+                        navigate('detail', { id: manhwaId });
+                    }
                 };
                 mdxResults.appendChild(card);
             });

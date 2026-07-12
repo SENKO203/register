@@ -342,18 +342,35 @@ app.get('/api/mangadex/search', requireAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// قائمة فصول مانجا — عربية أولاً ثم إنجليزية
+// دالة مساعدة: جلب كل الفصول مع pagination تلقائي
+async function fetchAllMdxChapters(mdxId, lang) {
+    const base = `https://api.mangadex.org/manga/${mdxId}/feed`;
+    const all = [];
+    let offset = 0;
+    while (true) {
+        const data = await mdxFetch(
+            `${base}?translatedLanguage[]=${lang}&order[chapter]=asc&limit=500&offset=${offset}`
+        );
+        const page = data.data || [];
+        all.push(...page);
+        if (page.length < 500) break;   // آخر صفحة
+        offset += 500;
+        if (offset >= 3000) break;      // حماية: 3000 فصل كحد أقصى
+    }
+    return all;
+}
+
+// قائمة فصول مانجا — عربية أولاً ثم إنجليزية، مع pagination
 app.get('/api/mangadex/:mdxId/chapters', requireAdmin, async (req, res) => {
     try {
-        const base = `https://api.mangadex.org/manga/${req.params.mdxId}/feed`;
-        let data = await mdxFetch(`${base}?translatedLanguage[]=ar&order[chapter]=asc&limit=500`);
+        let items = await fetchAllMdxChapters(req.params.mdxId, 'ar');
         let lang = 'ar';
-        if (!(data.data?.length)) {
-            data = await mdxFetch(`${base}?translatedLanguage[]=en&order[chapter]=asc&limit=500`);
+        if (!items.length) {
+            items = await fetchAllMdxChapters(req.params.mdxId, 'en');
             lang = 'en';
         }
         const seen = new Set();
-        const chapters = (data.data || [])
+        const chapters = items
             .filter(c => c.attributes.chapter)
             .map(c => ({
                 id: c.id, num: parseFloat(c.attributes.chapter),
@@ -435,6 +452,98 @@ app.post('/api/mangadex/download-chapter', requireAdmin, async (req, res) => {
             if (job) { job.status = 'error'; job.error = e.message; }
         } finally {
             setTimeout(() => activeJobs.delete(jobKey), 10 * 60 * 1000);
+        }
+    })();
+});
+
+// تحميل جميع الفصول العربية دفعة واحدة
+app.post('/api/mangadex/download-all', requireAdmin, async (req, res) => {
+    const { manhwaId, mdxId } = req.body;
+    if (!manhwaId || !mdxId) return res.status(400).json({ error: 'يحتاج manhwaId وmdxId' });
+
+    const jobKey = crypto.randomBytes(12).toString('hex');
+    activeJobs.set(jobKey, { status: 'fetching', progress: null, error: null });
+    res.json({ jobKey });
+
+    (async () => {
+        const job = activeJobs.get(jobKey);
+        try {
+            // جلب قائمة الفصول العربية أولاً
+            let items = await fetchAllMdxChapters(mdxId, 'ar');
+            let lang = 'ar';
+            if (!items.length) { items = await fetchAllMdxChapters(mdxId, 'en'); lang = 'en'; }
+
+            const seen = new Set();
+            const chapters = items
+                .filter(c => c.attributes.chapter)
+                .map(c => ({ id: c.id, num: parseFloat(c.attributes.chapter), lang }))
+                .filter(c => seen.has(c.num) ? false : seen.add(c.num));
+
+            job.status = 'downloading';
+            job.total  = chapters.length;
+            job.done   = 0;
+
+            // تحميل كل فصل
+            for (let i = 0; i < chapters.length; i++) {
+                const ch = chapters[i];
+                job.progress = { page: i + 1, total: chapters.length, stage: 'download', chapterNum: ch.num };
+
+                // تخطي الفصول المحملة سابقاً
+                const mNow = db.getManhwa(manhwaId);
+                if ((mNow?.chapters || []).some(c => String(c.num) === String(ch.num))) {
+                    job.done++; continue;
+                }
+
+                try {
+                    const serverData = await mdxFetch(`https://api.mangadex.org/at-home/server/${ch.id}`);
+                    const { baseUrl, chapter: { hash, data: pageFiles } } = serverData;
+                    const dir = path.join(db.DATA_DIR, 'library', manhwaId, `chapter-${ch.num}`);
+                    fs.mkdirSync(dir, { recursive: true });
+                    const imagePaths = [];
+
+                    for (let j = 0; j < pageFiles.length; j++) {
+                        const imgRes = await fetch(`${baseUrl}/data/${hash}/${pageFiles[j]}`);
+                        if (!imgRes.ok) continue;
+                        const buf = Buffer.from(await imgRes.arrayBuffer());
+                        const ext = path.extname(pageFiles[j]) || '.jpg';
+                        const imgPath = path.join(dir, `page-${String(j + 1).padStart(3, '0')}${ext}`);
+                        fs.writeFileSync(imgPath, buf);
+                        imagePaths.push(imgPath);
+                    }
+
+                    // عربي = بدون OCR، إنجليزي = مع OCR
+                    let pagesData;
+                    if (ch.lang === 'ar') {
+                        pagesData = imagePaths.map(p => ({
+                            imageUrl: `/library-files/library/${manhwaId}/chapter-${ch.num}/${path.basename(p)}`,
+                            width: 0, height: 0, textBlocks: [],
+                        }));
+                    } else {
+                        const r = await processChapterImages(manhwaId, ch.num, imagePaths, () => {});
+                        pagesData = r.pages.map((p, k) => ({
+                            imageUrl: `/library-files/library/${manhwaId}/chapter-${ch.num}/${path.basename(imagePaths[k])}`,
+                            width: p.width, height: p.height, textBlocks: p.textBlocks,
+                        }));
+                    }
+
+                    const mSaved = db.getManhwa(manhwaId);
+                    const chs = mSaved?.chapters || [];
+                    const ei = chs.findIndex(c => String(c.num) === String(ch.num));
+                    if (ei >= 0) chs[ei].pages = pagesData;
+                    else chs.push({ num: ch.num, pages: pagesData });
+                    db.upsertManhwa(manhwaId, { chapters: chs });
+                } catch (chErr) {
+                    console.error(`[bulk ch${ch.num}]`, chErr.message);
+                }
+                job.done++;
+                await new Promise(r => setTimeout(r, 300)); // لحظة بين الفصول
+            }
+
+            job.status = 'done';
+        } catch (e) {
+            if (job) { job.status = 'error'; job.error = e.message; }
+        } finally {
+            setTimeout(() => activeJobs.delete(jobKey), 60 * 60 * 1000);
         }
     })();
 });
