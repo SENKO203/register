@@ -29,14 +29,20 @@ const activeSessions = new Map();
 
 function requireAuth(req, res, next) {
     const auth = getAuthConfig();
-    if (!auth.passwordHash) return next();
+    // Fresh install (no admin password yet) — allow everything
+    if (!auth.adminPasswordHash) return next();
+
     const token = req.cookies?.session;
     if (token && activeSessions.has(token)) {
         req.isAdmin = activeSessions.get(token).isAdmin;
         return next();
     }
-    if (req.path.startsWith('/api/') && req.path !== '/api/login')
-        return res.status(401).json({ error: 'يحتاج تسجيل دخول' });
+    // If a reader password is set, require login to view the site
+    if (auth.passwordHash) {
+        if (req.path.startsWith('/api/') && req.path !== '/api/login')
+            return res.status(401).json({ error: 'يحتاج تسجيل دخول' });
+    }
+    // No reader password → public read access; write ops still guarded by requireAdmin
     next();
 }
 function requireAdmin(req, res, next) {
@@ -48,32 +54,32 @@ app.use(requireAuth);
 app.post('/api/login', (req, res) => {
     const auth = getAuthConfig();
     const { password } = req.body;
-    const isFirstSetup = !auth.passwordHash;
+    // First setup = no admin password exists yet
+    const isFirstSetup = !auth.adminPasswordHash;
     let isAdmin = false;
 
     if (isFirstSetup) {
         if (!password || password.length < 4)
             return res.status(400).json({ error: 'كلمة المرور لازم 4 أحرف على الأقل' });
-        const salt = crypto.randomBytes(16).toString('hex');
-        const passwordHash = hashPassword(password, salt);
+        // Create admin password only; site remains open to readers by default
+        const adminSalt = crypto.randomBytes(16).toString('hex');
+        const adminPasswordHash = hashPassword(password, adminSalt);
         fs.writeFileSync(AUTH_CONFIG_PATH, JSON.stringify({
-            passwordHash, salt, adminPasswordHash: passwordHash, adminSalt: salt,
+            passwordHash: null, salt: null, adminPasswordHash, adminSalt,
         }, null, 2));
         isAdmin = true;
     } else {
         const pwd = password || '';
-        const adminSalt     = auth.adminSalt || auth.salt;
-        const adminExpected = auth.adminPasswordHash || auth.passwordHash;
-        if (hashPassword(pwd, adminSalt) === adminExpected) {
+        // Check admin password first
+        if (auth.adminPasswordHash && hashPassword(pwd, auth.adminSalt) === auth.adminPasswordHash) {
             isAdmin = true;
-            if (!auth.adminPasswordHash) {
-                fs.writeFileSync(AUTH_CONFIG_PATH, JSON.stringify({
-                    ...auth, adminPasswordHash: auth.passwordHash, adminSalt: auth.salt,
-                }, null, 2));
-            }
-        } else {
+        } else if (auth.passwordHash) {
+            // Check reader password
             if (hashPassword(pwd, auth.salt) !== auth.passwordHash)
                 return res.status(401).json({ error: 'كلمة مرور خاطئة' });
+        } else {
+            // No reader password and wrong admin password
+            return res.status(401).json({ error: 'كلمة مرور خاطئة' });
         }
     }
 
@@ -174,12 +180,18 @@ app.post('/api/settings', requireAdmin, (req, res) => {
         if (req.body[key] !== undefined) updates[key] = String(req.body[key]).trim();
     }
     fs.writeFileSync(configPath, JSON.stringify({ ...current, ...updates }, null, 2));
+    const auth = getAuthConfig();
+    let authUpdates = {};
     if (req.body.readerPassword && req.body.readerPassword.length >= 4) {
         const salt = crypto.randomBytes(16).toString('hex');
-        const passwordHash = hashPassword(req.body.readerPassword, salt);
-        const auth = getAuthConfig();
-        fs.writeFileSync(AUTH_CONFIG_PATH, JSON.stringify({ ...auth, passwordHash, salt }, null, 2));
+        authUpdates = { ...authUpdates, passwordHash: hashPassword(req.body.readerPassword, salt), salt };
     }
+    if (req.body.adminPassword && req.body.adminPassword.length >= 4) {
+        const adminSalt = crypto.randomBytes(16).toString('hex');
+        authUpdates = { ...authUpdates, adminPasswordHash: hashPassword(req.body.adminPassword, adminSalt), adminSalt };
+    }
+    if (Object.keys(authUpdates).length)
+        fs.writeFileSync(AUTH_CONFIG_PATH, JSON.stringify({ ...auth, ...authUpdates }, null, 2));
     res.json({ ok: true });
 });
 
@@ -286,48 +298,60 @@ app.get('/api/mangadex/search', requireAdmin, async (req, res) => {
     try {
         const q = (req.query.q || '').trim();
         if (!q) return res.status(400).json({ error: 'يحتاج q' });
-        const data = await mdxFetch(
-            `https://api.mangadex.org/manga?title=${encodeURIComponent(q)}&limit=12&order[relevance]=desc&includes[]=cover_art`
-        );
+        const params = new URLSearchParams({
+            title: q, limit: '15', 'order[relevance]': 'desc',
+            'includes[]': 'cover_art',
+            'contentRating[]': ['safe', 'suggestive', 'erotica'],
+        });
+        const data = await mdxFetch(`https://api.mangadex.org/manga?${params}`);
         const results = (data.data || []).map(m => {
             const coverRel = m.relationships?.find(r => r.type === 'cover_art');
-            const cover = coverRel
-                ? `https://uploads.mangadex.org/covers/${m.id}/${coverRel.attributes?.fileName}.256.jpg`
+            const cover = coverRel?.attributes?.fileName
+                ? `https://uploads.mangadex.org/covers/${m.id}/${coverRel.attributes.fileName}.256.jpg`
                 : null;
             const title = m.attributes.title.en || m.attributes.title['ja-ro']
-                || Object.values(m.attributes.title)[0] || '';
+                || m.attributes.title.ko || Object.values(m.attributes.title)[0] || '';
+            const hasAr = (m.attributes.availableTranslatedLanguages || []).includes('ar');
             return {
                 id:          m.id,
                 title,
-                description: (m.attributes.description?.en || '').slice(0, 300),
+                description: (m.attributes.description?.en || m.attributes.description?.ar || '').slice(0, 300),
                 tags:        (m.attributes.tags || []).slice(0, 5)
                     .map(t => t.attributes?.localizedName?.en || '').filter(Boolean),
                 cover,
                 status:      m.attributes.status,
+                hasAr,
             };
         });
         res.json(results);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// قائمة فصول مانجا
+// قائمة فصول مانجا — عربية أولاً ثم إنجليزية
 app.get('/api/mangadex/:mdxId/chapters', requireAdmin, async (req, res) => {
     try {
-        const data = await mdxFetch(
-            `https://api.mangadex.org/manga/${req.params.mdxId}/feed?translatedLanguage[]=en&order[chapter]=asc&limit=500`
-        );
+        const base = `https://api.mangadex.org/manga/${req.params.mdxId}/feed`;
+        let data = await mdxFetch(`${base}?translatedLanguage[]=ar&order[chapter]=asc&limit=500`);
+        let lang = 'ar';
+        if (!(data.data?.length)) {
+            data = await mdxFetch(`${base}?translatedLanguage[]=en&order[chapter]=asc&limit=500`);
+            lang = 'en';
+        }
         const seen = new Set();
         const chapters = (data.data || [])
             .filter(c => c.attributes.chapter)
-            .map(c => ({ id: c.id, num: parseFloat(c.attributes.chapter), title: c.attributes.title || '', pages: c.attributes.pages }))
+            .map(c => ({
+                id: c.id, num: parseFloat(c.attributes.chapter),
+                title: c.attributes.title || '', pages: c.attributes.pages, lang,
+            }))
             .filter(c => seen.has(c.num) ? false : seen.add(c.num));
         res.json(chapters);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// تحميل فصل + ترجمة تلقائية
+// تحميل فصل — عربي (بدون ترجمة) أو إنجليزي (مع OCR+ترجمة)
 app.post('/api/mangadex/download-chapter', requireAdmin, async (req, res) => {
-    const { manhwaId, chapterId, chapterNum } = req.body;
+    const { manhwaId, chapterId, chapterNum, lang } = req.body;
     if (!manhwaId || !chapterId || chapterNum == null)
         return res.status(400).json({ error: 'يحتاج manhwaId وchapterId وchapterNum' });
 
@@ -358,28 +382,40 @@ app.post('/api/mangadex/download-chapter', requireAdmin, async (req, res) => {
                 imagePaths.push(imgPath);
             }
 
-            // 3. Vision + ترجمة
-            const result = await processChapterImages(manhwaId, chapterNum, imagePaths, p => {
-                if (job) job.progress = p;
-            });
-
-            // 4. حفظ
-            const m = db.getManhwa(manhwaId);
-            if (m) {
-                const chapters  = m.chapters || [];
-                const existing  = chapters.find(c => String(c.num) === String(chapterNum));
-                const pagesData = result.pages.map((p, i) => ({
+            let pagesData;
+            if (lang === 'ar') {
+                // فصل عربي جاهز — لا حاجة للترجمة، الصور مترجمة بالفعل
+                if (job) job.progress = { page: imagePaths.length, total: imagePaths.length, stage: 'done' };
+                pagesData = imagePaths.map((imgPath, i) => ({
+                    imageUrl:   `/library-files/library/${manhwaId}/chapter-${chapterNum}/${path.basename(imgPath)}`,
+                    width:      0,
+                    height:     0,
+                    textBlocks: [],
+                }));
+            } else {
+                // فصل إنجليزي — تشغيل OCR + ترجمة
+                const result = await processChapterImages(manhwaId, chapterNum, imagePaths, p => {
+                    if (job) job.progress = p;
+                });
+                pagesData = result.pages.map((p, i) => ({
                     imageUrl:   `/library-files/library/${manhwaId}/chapter-${chapterNum}/${path.basename(imagePaths[i])}`,
                     width:      p.width,
                     height:     p.height,
                     textBlocks: p.textBlocks,
                 }));
+            }
+
+            // 3. حفظ
+            const m = db.getManhwa(manhwaId);
+            if (m) {
+                const chapters = m.chapters || [];
+                const existing = chapters.find(c => String(c.num) === String(chapterNum));
                 if (existing) existing.pages = pagesData;
                 else chapters.push({ num: chapterNum, pages: pagesData });
                 chapters.sort((a, b) => Number(a.num) - Number(b.num));
                 db.upsertManhwa(manhwaId, { chapters });
             }
-            if (job) { job.status = 'done'; job.result = result; }
+            if (job) { job.status = 'done'; }
         } catch (e) {
             if (job) { job.status = 'error'; job.error = e.message; }
         } finally {

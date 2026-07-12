@@ -148,7 +148,7 @@ async function render(view, params) {
     if (view === 'library-list') return renderLibraryList();
     if (view === 'my-library')   return renderMyLibrary(params.id || 'favorites');
     if (view === 'profile')      return renderProfile();
-    if (view === 'admin')        return renderAdmin();
+    if (view === 'admin')        { if (!isAdmin) return navigate('home'); return renderAdmin(); }
     if (view === 'detail')       return renderDetail(params.id);
     if (view === 'reader')       return renderReader(params.id, params.chapter);
 }
@@ -435,15 +435,18 @@ async function renderDetail(id) {
                 } else {
                     mdxChapters.forEach(ch => {
                         const downloaded = existingNums.has(String(ch.num));
+                        const isAr = ch.lang === 'ar';
                         const row = document.createElement('div');
                         row.className = 'chapter-row';
+                        const dlLabel = isAr ? 'تحميل 🇸🇦' : 'تحميل ✦ ترجمة';
                         row.innerHTML = `
                             <span class="chapter-num">فصل ${ch.num}${ch.title ? ' — ' + escapeHtml(ch.title) : ''}</span>
-                            <div style="display:flex;align-items:center;gap:10px">
+                            <div style="display:flex;align-items:center;gap:8px">
+                                <span style="font-size:10px;padding:2px 6px;border-radius:20px;background:${isAr ? '#1565c0' : '#333'};color:#fff">${isAr ? 'عربي' : 'EN'}</span>
                                 <span style="font-size:11px;color:var(--text-muted)">${ch.pages} صفحة</span>
                                 ${downloaded
                                     ? '<span style="color:var(--gold);font-size:13px">✓ محمّل</span>'
-                                    : `<button class="btn-mdx-dl" data-cid="${ch.id}" data-num="${ch.num}">تحميل ✦ ترجمة</button>`}
+                                    : `<button class="btn-mdx-dl" data-cid="${ch.id}" data-num="${ch.num}" data-lang="${isAr ? 'ar' : 'en'}">${dlLabel}</button>`}
                             </div>
                         `;
                         if (!downloaded) {
@@ -454,13 +457,13 @@ async function renderDetail(id) {
                                 try {
                                     const { jobKey } = await api('/mangadex/download-chapter', {
                                         method: 'POST',
-                                        body: JSON.stringify({ manhwaId: id, chapterId: ch.id, chapterNum: ch.num }),
+                                        body: JSON.stringify({ manhwaId: id, chapterId: ch.id, chapterNum: ch.num, lang: ch.lang }),
                                     });
                                     while (true) {
                                         await new Promise(r => setTimeout(r, 2000));
                                         const job = await fetch(`/api/job/${jobKey}`).then(r => r.json());
                                         if (job.status === 'done') {
-                                            btn.textContent = '✓ تمت الترجمة';
+                                            btn.textContent = '✓ تم التحميل';
                                             btn.style.color = 'var(--gold)';
                                             existingNums.add(String(ch.num));
                                             break;
@@ -468,7 +471,8 @@ async function renderDetail(id) {
                                             throw new Error(job.error);
                                         } else if (job.progress) {
                                             const { page, total, stage } = job.progress;
-                                            btn.textContent = `${stage === 'download' ? 'تحميل' : 'ترجمة'} ${page}/${total}...`;
+                                            const stageLabel = stage === 'download' ? 'تحميل' : stage === 'done' ? 'اكتمل' : 'ترجمة';
+                                            btn.textContent = `${stageLabel} ${page}/${total}...`;
                                         }
                                     }
                                 } catch (err) {
@@ -698,7 +702,10 @@ async function renderAdmin() {
                     <img class="mdx-cover" src="${manga.cover || placeholderCover()}" alt="" loading="lazy">
                     <div class="mdx-info">
                         <div class="mdx-title">${escapeHtml(manga.title)}</div>
-                        <div class="mdx-status">${statusMap[manga.status] || manga.status || ''}</div>
+                        <div class="mdx-status">
+                            ${statusMap[manga.status] || manga.status || ''}
+                            ${manga.hasAr ? '<span style="margin-right:6px;padding:2px 7px;border-radius:20px;background:#1565c0;color:#fff;font-size:10px">🇸🇦 عربي</span>' : ''}
+                        </div>
                         <div class="mdx-tags">${manga.tags.map(t => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>
                         <button class="btn btn-primary mdx-add-btn" style="margin-top:8px;font-size:12px;padding:8px 14px">+ إضافة للمكتبة</button>
                     </div>
@@ -772,12 +779,15 @@ async function renderAdmin() {
         };
         const readerPw = document.getElementById('admin-reader-pw').value.trim();
         if (readerPw) body.readerPassword = readerPw;
+        const adminPw = document.getElementById('admin-admin-pw').value.trim();
+        if (adminPw) body.adminPassword = adminPw;
         await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         });
         document.getElementById('admin-reader-pw').value = '';
+        document.getElementById('admin-admin-pw').value = '';
         alert('تم الحفظ ✓');
     };
 
