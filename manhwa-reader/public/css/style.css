@@ -492,16 +492,7 @@ body.detail-page .app-header {
 .reader-scroll { display: flex; flex-direction: column; align-items: center; }
 .reader-page { position: relative; width: 100%; max-width: 640px; }
 .reader-page img { width: 100%; display: block; }
-.text-overlay {
-    position: absolute;
-    background: rgba(255,255,255,.99); color: #111;
-    display: flex; align-items: center; justify-content: center;
-    text-align: center; font-size: 11px; line-height: 1.3;
-    padding: 3px 5px; border-radius: 8px;
-    font-weight: 700; font-family: 'Cairo', sans-serif;
-    overflow: hidden; word-break: break-word;
-    pointer-events: none;
-}
+.reader-page canvas { width: 100%; display: block; }
 .reader-end { text-align: center; padding: 50px 18px 70px; }
 .reader-end p { color: var(--text-muted); margin-bottom: 18px; }
 

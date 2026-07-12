@@ -706,6 +706,113 @@ async function renderDetail(id) {
 }
 
 // ============================================================
+//   رسم صفحة على Canvas — يمحو النص الأصلي ويكتب العربية داخل الفقاعة
+// ============================================================
+function buildPageCanvas(page) {
+    return new Promise((resolve, reject) => {
+        const canvas = document.createElement('canvas');
+        const ctx    = canvas.getContext('2d');
+        const img    = new Image();
+
+        img.onload = () => {
+            canvas.width  = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            ctx.drawImage(img, 0, 0);
+
+            for (const block of page.textBlocks || []) {
+                const { bbox, translated, type: t = 'speech' } = block;
+                if (!translated || !bbox) continue;
+                const x = bbox.x0, y = bbox.y0;
+                const w = bbox.x1 - bbox.x0;
+                const h = bbox.y1 - bbox.y0;
+                if (w < 8 || h < 8) continue;
+
+                ctx.save();
+
+                if (t === 'sfx') {
+                    // مؤثر صوتي: بادج صغير بالزاوية
+                    ctx.font = 'bold 13px Cairo, sans-serif';
+                    const tw = ctx.measureText(translated).width + 10;
+                    ctx.fillStyle = 'rgba(0,0,0,.75)';
+                    ctx.fillRect(x, y, tw, 20);
+                    ctx.fillStyle = '#fff';
+                    ctx.textAlign = 'right';
+                    ctx.textBaseline = 'middle';
+                    ctx.direction = 'rtl';
+                    ctx.fillText(translated, x + tw - 5, y + 10);
+                } else if (t === 'narration') {
+                    // صندوق سرد مستطيل
+                    ctx.fillStyle = 'rgb(245,242,230)';
+                    ctx.fillRect(x, y, w, h);
+                    ctx.strokeStyle = 'rgba(0,0,0,.25)';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x + .5, y + .5, w - 1, h - 1);
+                    paintTextInBubble(ctx, translated, x, y, w, h, '#1a1a1a', 0.88);
+                } else {
+                    // speech / thought: شكل إهليلجي أبيض
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath();
+                    ctx.ellipse(x + w / 2, y + h / 2, w / 2 * 1.03, h / 2 * 1.03, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    paintTextInBubble(ctx, translated, x, y, w, h, '#111', 0.76);
+                }
+
+                ctx.restore();
+            }
+
+            resolve(canvas);
+        };
+
+        img.onerror = reject;
+        img.src = page.imageUrl;
+    });
+}
+
+function paintTextInBubble(ctx, text, bx, by, bw, bh, color, padFactor) {
+    const maxW = bw * padFactor;
+    const maxH = bh * padFactor;
+    const cx   = bx + bw / 2;
+    const cy   = by + bh / 2;
+
+    // ابحث عن أكبر حجم خط يتسع داخل الفقاعة
+    const hi = Math.min(Math.floor(bw / 3.5), Math.floor(bh / 1.5), 36);
+    let bestSize = 10, bestLines = [text];
+
+    for (let size = Math.max(hi, 10); size >= 10; size--) {
+        ctx.font = `700 ${size}px Cairo, sans-serif`;
+        const lines = wrapTextCanvas(ctx, text, maxW);
+        if (lines.length * size * 1.35 <= maxH) {
+            bestSize = size; bestLines = lines; break;
+        }
+    }
+
+    ctx.font         = `700 ${bestSize}px Cairo, sans-serif`;
+    ctx.fillStyle    = color;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.direction    = 'rtl';
+
+    const lineH  = bestSize * 1.35;
+    const totalH = bestLines.length * lineH;
+    const startY = cy - totalH / 2 + lineH / 2;
+    bestLines.forEach((line, i) => ctx.fillText(line, cx, startY + i * lineH));
+}
+
+function wrapTextCanvas(ctx, text, maxW) {
+    const words = text.split(/\s+/);
+    const lines  = [];
+    let cur = '';
+    for (const w of words) {
+        const test = cur ? cur + ' ' + w : w;
+        if (ctx.measureText(test).width > maxW && cur) {
+            lines.push(cur); cur = w;
+        } else cur = test;
+    }
+    if (cur) lines.push(cur);
+    return lines.length ? lines : [text];
+}
+
+// ============================================================
 //   القارئ
 // ============================================================
 async function renderReader(id, chapterNum) {
@@ -719,45 +826,64 @@ async function renderReader(id, chapterNum) {
 
     const scroll = document.getElementById('reader-scroll');
     let showOriginal = false;
-    document.getElementById('reader-toggle-original').onclick = () => {
+    const hasBlocks = (chapter.pages || []).some(p => p.textBlocks?.length > 0);
+
+    const toggleBtn = document.getElementById('reader-toggle-original');
+    toggleBtn.title = 'عرض الصفحة الأصلية';
+    toggleBtn.onclick = () => {
         showOriginal = !showOriginal;
+        toggleBtn.style.color = showOriginal ? 'var(--red)' : '';
         renderPages();
     };
 
     function renderPages() {
         scroll.innerHTML = '';
-        (chapter.pages || []).forEach(page => {
+        document.getElementById('reader-end').hidden = true;
+
+        if (showOriginal || !hasBlocks) {
+            // الصور الأصلية بدون معالجة
+            (chapter.pages || []).forEach(page => {
+                const wrap = document.createElement('div');
+                wrap.className = 'reader-page';
+                const img = document.createElement('img');
+                img.src = page.imageUrl; img.loading = 'lazy';
+                wrap.appendChild(img);
+                scroll.appendChild(wrap);
+            });
+            document.getElementById('reader-end').hidden = false;
+        } else {
+            renderWithCanvas();
+        }
+    }
+
+    async function renderWithCanvas() {
+        await document.fonts.ready;
+        for (const page of chapter.pages || []) {
             const wrap = document.createElement('div');
             wrap.className = 'reader-page';
-            const img = document.createElement('img');
-            img.src = page.imageUrl;
-            img.loading = 'lazy';
-            wrap.appendChild(img);
-            (page.textBlocks || []).forEach(block => {
-                const text = showOriginal ? block.original : block.translated;
-                if (!text) return;
-                const box = document.createElement('div');
-                box.className = 'text-overlay';
-                let [x0, y0, x1, y1] = normalizedBbox(block.bbox, page.width, page.height);
-                const pad = 2;
-                const left = Math.max(0, x0 - pad);
-                const top  = Math.max(0, y0 - pad);
-                const w    = Math.min(100 - left, (x1 - x0) + pad * 2);
-                const h    = Math.min(100 - top,  (y1 - y0) + pad * 2);
-                box.style.left   = left + '%';
-                box.style.top    = top  + '%';
-                box.style.width  = w    + '%';
-                box.style.height = h    + '%';
-                const boxWidthPx = (w / 100) * (wrap.offsetWidth || 360);
-                const fontSize = Math.max(9, Math.min(14, boxWidthPx / 8));
-                box.style.fontSize = fontSize + 'px';
-                box.textContent  = text;
-                wrap.appendChild(box);
-            });
             scroll.appendChild(wrap);
-        });
+
+            if (page.textBlocks?.length) {
+                try {
+                    const canvas = await buildPageCanvas(page);
+                    canvas.style.cssText = 'width:100%;display:block;';
+                    wrap.appendChild(canvas);
+                } catch {
+                    appendPageImg(wrap, page.imageUrl);
+                }
+            } else {
+                appendPageImg(wrap, page.imageUrl);
+            }
+        }
         document.getElementById('reader-end').hidden = false;
     }
+
+    function appendPageImg(wrap, url) {
+        const img = document.createElement('img');
+        img.src = url; img.loading = 'lazy';
+        wrap.appendChild(img);
+    }
+
     renderPages();
 
     const hintKey = `hint-${id}`;
@@ -789,14 +915,6 @@ async function renderReader(id, chapterNum) {
         nextBtn.textContent = 'هذا آخر فصل متاح';
         nextBtn.disabled = true;
     }
-}
-
-function normalizedBbox(bbox, w, h) {
-    if (!bbox || !w || !h) return [0, 0, 0, 0];
-    return [
-        (bbox.x0 / w) * 100, (bbox.y0 / h) * 100,
-        (bbox.x1 / w) * 100, (bbox.y1 / h) * 100,
-    ];
 }
 
 // ============================================================
