@@ -12,15 +12,13 @@
 
 <!-- ============ هيدر علوي ثابت ============ -->
 <header class="app-header">
-    <div class="header-icons">
-        <button class="hbtn" id="btn-open-drawer" aria-label="القائمة">
-            <svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-        </button>
-    </div>
     <div class="header-logo">MED<span class="logo-accent">O</span>SA</div>
     <div class="header-icons">
         <button class="hbtn" id="btn-header-profile" aria-label="حسابي">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+        </button>
+        <button class="hbtn" id="btn-open-drawer" aria-label="القائمة">
+            <svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
         </button>
     </div>
 </header>
@@ -134,51 +132,72 @@
 
 <!-- صفحة التفاصيل — AZORA style -->
 <template id="tpl-detail">
-    <!-- الخلفية المضبّبة تُضاف على body.detail-page::before عبر CSS -->
+    <!-- زر الرجوع -->
     <button class="icon-btn detail-back-btn" id="btn-back">
-        <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
     </button>
 
-    <!-- بطاقة العمل العلوية: غلاف + معلومات -->
-    <div class="detail-card">
-        <div class="detail-thumb-wrap">
-            <img class="detail-thumb" id="detail-cover" alt="">
-        </div>
-        <div class="detail-info">
-            <h1 class="detail-title" id="detail-title"></h1>
-            <div class="detail-status-row">
-                <span class="status-dot"></span>
-                <span>مستمر</span>
-                <span class="detail-ch-count" id="detail-ch-count"></span>
-            </div>
-            <div class="tag-row" id="detail-tags"></div>
-            <div class="action-row">
-                <button class="btn btn-blue" id="btn-add-list">
-                    <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-                    أضف للمكتبة
-                </button>
-                <button class="btn btn-primary" id="btn-continue-read">
-                    <svg viewBox="0 0 24 24"><path d="M6 4l12 8-12 8V4z"/></svg>
-                    اقرأ الآن
-                </button>
-            </div>
+    <!-- غلاف كامل الشاشة -->
+    <div class="detail-hero">
+        <img class="detail-hero-img" id="detail-cover" alt="">
+        <div class="detail-hero-overlay"></div>
+        <div class="detail-hero-bottom">
+            <h1 class="detail-hero-title" id="detail-title"></h1>
         </div>
     </div>
 
-    <!-- الوصف -->
-    <div class="detail-desc-wrap">
-        <p class="detail-desc" id="detail-desc"></p>
+    <!-- أزرار الفعل تحت الغلاف -->
+    <div class="detail-action-row">
+        <button class="btn btn-blue detail-wide-btn" id="btn-add-list">
+            <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+            أضف للمكتبة
+        </button>
+        <button class="btn btn-primary detail-wide-btn" id="btn-continue-read">
+            <svg viewBox="0 0 24 24"><path d="M6 4l12 8-12 8V4z"/></svg>
+            اقرأ الآن
+        </button>
     </div>
 
-    <!-- فصول MangaDex — للمدير فقط -->
-    <div id="mdx-chapter-section" hidden>
-        <h2 class="section-title">فصول MangaDex</h2>
-        <div class="chapter-list" id="mdx-chapter-list"></div>
+    <!-- شبكة الميتا -->
+    <div class="detail-meta-grid">
+        <div class="detail-meta-item">
+            <span class="detail-meta-label">الحالة</span>
+            <span class="detail-meta-val">مستمر</span>
+        </div>
+        <div class="detail-meta-item">
+            <span class="detail-meta-label">النوع</span>
+            <span class="detail-meta-val" id="detail-type">مانهوا</span>
+        </div>
+        <div class="detail-meta-item">
+            <span class="detail-meta-label">الفصول</span>
+            <span class="detail-meta-val" id="detail-ch-count">—</span>
+        </div>
     </div>
 
-    <!-- الفصول المحلية -->
-    <h2 class="section-title">الفصول</h2>
-    <div class="chapter-list" id="chapter-list"></div>
+    <!-- الوسوم -->
+    <div class="tag-row" id="detail-tags" style="padding:0 18px 14px;"></div>
+
+    <!-- تبويبات -->
+    <div class="detail-tabs-bar">
+        <button class="detail-tab active" data-tab="chapters">الفصول</button>
+        <button class="detail-tab" data-tab="summary">الملخص</button>
+    </div>
+
+    <!-- محتوى: الفصول -->
+    <div id="detail-tab-chapters">
+        <div id="mdx-chapter-section" hidden>
+            <h2 class="section-title">فصول MangaDex</h2>
+            <div class="chapter-list" id="mdx-chapter-list" style="padding:0 18px"></div>
+        </div>
+        <div class="chapter-list" id="chapter-list" style="padding:0 18px;gap:0;background:rgba(255,255,255,.03);border-radius:10px;overflow:hidden;margin:0 18px 24px"></div>
+    </div>
+
+    <!-- محتوى: الملخص -->
+    <div id="detail-tab-summary" hidden>
+        <div class="detail-desc-wrap">
+            <p class="detail-desc" id="detail-desc"></p>
+        </div>
+    </div>
 </template>
 
 <template id="tpl-reader">

@@ -329,22 +329,9 @@ function buildAzoraCard(m, progress, showProgress = false) {
     const readCount = progress?.readChapters?.length || 0;
     const total     = m.chapters?.length || 0;
     const pct       = total ? Math.round((readCount / total) * 100) : 0;
-    const chapters  = (m.chapters || []).slice(-4).reverse();
     const tags      = m.tags || [];
     const typeLabel = tags.some(t => /رواية|novel/i.test(t)) ? 'رواية' : 'مانهوا';
     const typeClass = typeLabel === 'رواية' ? 'novel' : 'manhwa';
-
-    const chapRows = chapters.length
-        ? chapters.map(ch => {
-            const isRead = progress?.readChapters?.includes(String(ch.num));
-            return `<div class="lcc-row">
-                <span class="lcc-num">الفصل ${ch.num}</span>
-                ${isRead
-                    ? `<span class="lcc-read">✓ مقروء</span>`
-                    : `<span class="lcc-badge">🔥 جديد</span>`}
-            </div>`;
-        }).join('')
-        : `<div class="lcc-row"><span class="lcc-num" style="color:var(--text-muted)">لا توجد فصول بعد</span></div>`;
 
     return `
         <div class="list-card-cover-wrap">
@@ -356,9 +343,11 @@ function buildAzoraCard(m, progress, showProgress = false) {
             <div class="list-card-status">
                 <span class="status-dot"></span>
                 <span>مستمر</span>
-                <span class="list-card-rating">⭐ ${total}</span>
             </div>
-            <div class="list-card-chapters-inner">${chapRows}</div>
+            <div class="list-card-meta">
+                <span>${total ? `${total} فصل` : 'لا توجد فصول'}</span>
+                <span class="list-card-rating">⭐ 5.0</span>
+            </div>
             ${showProgress && total ? `<div class="list-card-bar"><div class="list-card-fill" style="width:${pct}%"></div></div>` : ''}
         </div>
     `;
@@ -522,13 +511,22 @@ async function renderDetail(id) {
     const coverEl = document.getElementById('detail-cover');
     coverEl.src = m.coverUrl || placeholderCover();
 
-    // العنوان + معلومات
+    // العنوان
     document.getElementById('detail-title').textContent = m.title;
-    document.getElementById('detail-desc').textContent = m.description || '';
+
+    // النوع
+    const typeEl = document.getElementById('detail-type');
+    if (typeEl) {
+        typeEl.textContent = (m.tags || []).some(t => /رواية|novel/i.test(t)) ? 'رواية' : 'مانهوا';
+    }
+
+    // الوصف (في تبويب الملخص)
+    const descEl = document.getElementById('detail-desc');
+    if (descEl) descEl.textContent = m.description || 'لا يوجد وصف.';
 
     const chapters = m.chapters || [];
     const chCountEl = document.getElementById('detail-ch-count');
-    if (chCountEl) chCountEl.textContent = chapters.length ? `${chapters.length} فصل` : '';
+    if (chCountEl) chCountEl.textContent = chapters.length || '—';
 
     // زر الرجوع
     document.getElementById('btn-back').onclick = () => history.back();
@@ -539,6 +537,20 @@ async function renderDetail(id) {
         const chip = document.createElement('span');
         chip.className = 'tag-chip'; chip.textContent = t;
         tagsEl.appendChild(chip);
+    });
+
+    // تبويبات
+    const detailTabs = document.querySelectorAll('.detail-tab');
+    const tabChapters = document.getElementById('detail-tab-chapters');
+    const tabSummary  = document.getElementById('detail-tab-summary');
+    detailTabs.forEach(tab => {
+        tab.onclick = () => {
+            detailTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            const isChapters = tab.dataset.tab === 'chapters';
+            if (tabChapters) tabChapters.hidden = !isChapters;
+            if (tabSummary)  tabSummary.hidden  = isChapters;
+        };
     });
 
     // زر أضف للمكتبة
@@ -660,18 +672,32 @@ async function renderDetail(id) {
         }
     }
 
-    // الفصول المحلية
+    // الفصول المحلية — AZORA style
     const chapterList = document.getElementById('chapter-list');
     if (!chapters.length) {
         chapterList.innerHTML = '<p class="empty-hint">لا توجد فصول بعد.</p>';
+        chapterList.style.background = 'none';
     } else {
         chapters.forEach(ch => {
             const isRead = m.progress.readChapters.includes(String(ch.num));
+            const thumbUrl = ch.pages?.[0]?.imageUrl;
             const row = document.createElement('div');
-            row.className = 'chapter-row';
+            row.className = 'azora-ch-row';
             row.innerHTML = `
-                <span class="chapter-num">فصل ${ch.num}${ch.title ? ' — ' + escapeHtml(ch.title) : ''}</span>
-                <span class="read-check">${isRead ? '✓' : ''}</span>
+                <div class="azora-ch-right">
+                    ${thumbUrl
+                        ? `<img class="azora-ch-thumb" src="${thumbUrl}" alt="" loading="lazy">`
+                        : `<div class="azora-ch-thumb-ph"></div>`}
+                    <div class="azora-ch-info">
+                        <span class="azora-ch-num">الفصل ${ch.num}${ch.title ? ' — ' + escapeHtml(ch.title) : ''}</span>
+                        ${!isRead ? '<span class="azora-ch-badge">🔥 جديد</span>' : ''}
+                    </div>
+                </div>
+                <div class="azora-ch-left">
+                    <span class="azora-ch-stat">♡ 0</span>
+                    <span class="azora-ch-stat">💬 0</span>
+                    ${isRead ? '<span class="azora-ch-read">✓</span>' : ''}
+                </div>
             `;
             row.onclick = () => navigate('reader', { id, chapter: ch.num });
             chapterList.appendChild(row);
