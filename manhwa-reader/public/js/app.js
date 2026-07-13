@@ -313,48 +313,134 @@ async function renderHome() {
         inProgress.forEach(m => scroll.appendChild(buildCard(m, allProgress[m.id])));
     }
 
-    // ── شائع اليوم — أول 6 أعمال في شبكة 2 عمود ──
-    const popularItems = unique.slice(0, 6);
+    // ── شائع اليوم — كاروسيل Coverflow (أول 3) + شبكة 2 عمود (4-8) ──
+    const popularItems = unique.slice(0, 8);
     if (popularItems.length) {
         document.getElementById('home-popular-sec').hidden = false;
-        const grid = document.getElementById('home-popular-grid');
-        popularItems.forEach(m => {
-            const tl = (m.tags || []).some(t => /رواية|novel/i.test(t)) ? 'رواية' : 'مانهوا';
-            const card = document.createElement('div');
-            card.className = 'home-pop-card';
-            card.innerHTML = `
-                <img src="${m.coverUrl || placeholderCover()}" alt="${escapeHtml(m.title)}" loading="lazy">
-                <div class="home-pop-overlay"></div>
-                <span class="home-pop-badge">${tl}</span>
-                <div class="home-pop-title">${escapeHtml(m.title)}</div>
-            `;
-            card.onclick = () => navigate('detail', { id: m.id });
-            grid.appendChild(card);
-        });
+        // Coverflow carousel
+        buildPopularCarousel(popularItems.slice(0, 5), document.getElementById('home-popular-carousel'));
+        // 2-column grid for items 6-8
+        const gridItems = popularItems.slice(5);
+        if (gridItems.length) {
+            const grid = document.getElementById('home-popular-grid');
+            gridItems.forEach(m => {
+                const tl = (m.tags || []).some(t => /رواية|novel/i.test(t)) ? 'رواية' : 'مانهوا';
+                const card = document.createElement('div');
+                card.className = 'home-pop-card';
+                card.innerHTML = `
+                    <img src="${m.coverUrl || placeholderCover()}" alt="${escapeHtml(m.title)}" loading="lazy">
+                    <div class="home-pop-overlay"></div>
+                    <span class="home-pop-badge">${tl}</span>
+                    <div class="home-pop-title">${escapeHtml(m.title)}</div>
+                `;
+                card.onclick = () => navigate('detail', { id: m.id });
+                grid.appendChild(card);
+            });
+        }
     }
 
-    // ── أحدث الإصدارات — أعمال لها فصول ──
+    // ── أحدث الإصدارات — بطاقة AZORA style مع قائمة الفصول ──
     const withChapters = unique.filter(m => m.chapters?.length > 0);
     if (withChapters.length) {
         document.getElementById('home-updates-sec').hidden = false;
         document.getElementById('btn-home-view-all').onclick = () => navigate('library-list');
         const list = document.getElementById('home-updates-list');
-        withChapters.slice(0, 12).forEach(m => {
-            const latestCh = m.chapters[m.chapters.length - 1];
-            const row = document.createElement('div');
-            row.className = 'home-update-row';
-            row.innerHTML = `
-                <img class="home-update-thumb" src="${m.coverUrl || placeholderCover()}" alt="" loading="lazy">
-                <div class="home-update-info">
-                    <div class="home-update-title">${escapeHtml(m.title)}</div>
-                    <div class="home-update-ch">الفصل ${latestCh.num}${latestCh.title ? ' — ' + escapeHtml(latestCh.title) : ''}</div>
-                    <span class="home-update-free">مجاني</span>
+        withChapters.slice(0, 10).forEach(m => {
+            const tl = (m.tags || []).some(t => /رواية|novel/i.test(t)) ? 'رواية' : 'مانهوا';
+            const chs = m.chapters;
+            // Show last 2 chapters
+            const lastTwo = chs.slice(-2).reverse();
+            const chRows = lastTwo.map((ch, idx) => `
+                <div class="huc-ch-row">
+                    <span class="huc-ch-num">الفصل ${ch.num}${ch.title ? ' — ' + escapeHtml(ch.title) : ''}</span>
+                    ${idx === 0 ? '<span class="huc-ch-new">🔥 جديد</span>' : '<span class="huc-ch-time">سابق</span>'}
+                </div>
+            `).join('');
+            const card = document.createElement('div');
+            card.className = 'home-update-card';
+            card.innerHTML = `
+                <div class="huc-left">
+                    <div class="huc-title">${escapeHtml(m.title)}</div>
+                    <div class="huc-meta">
+                        <span class="huc-status-dot"></span>
+                        <span class="huc-status">مستمر</span>
+                        <span class="huc-rating">★ ${chs.length}</span>
+                    </div>
+                    <div class="huc-ch-list">${chRows}</div>
+                </div>
+                <div class="huc-right">
+                    <img class="huc-cover" src="${m.coverUrl || placeholderCover()}" alt="" loading="lazy">
+                    <span class="huc-badge-type">${tl}</span>
                 </div>
             `;
-            row.onclick = () => navigate('detail', { id: m.id });
-            list.appendChild(row);
+            card.onclick = () => navigate('detail', { id: m.id });
+            list.appendChild(card);
         });
     }
+}
+
+function buildPopularCarousel(items, container) {
+    if (!items.length) return;
+    const CARD_W = 195;
+    const MARGIN = 8;
+    const ITEM_W = CARD_W + MARGIN * 2;
+    let activeIdx = 0;
+
+    const carousel = document.createElement('div');
+    carousel.className = 'popular-carousel';
+
+    const track = document.createElement('div');
+    track.className = 'popular-cfv-track';
+
+    const cards = items.map((m, i) => {
+        const tl = (m.tags || []).some(t => /رواية|novel/i.test(t)) ? 'رواية' : 'مانهوا';
+        const card = document.createElement('div');
+        card.className = 'popular-cfv-card' + (i === 0 ? ' cfv-active' : '');
+        card.innerHTML = `
+            <img src="${m.coverUrl || placeholderCover()}" alt="${escapeHtml(m.title)}" loading="lazy">
+            <div class="popular-cfv-overlay"></div>
+            <span class="popular-cfv-badge">${tl}</span>
+            <div class="popular-cfv-title">${escapeHtml(m.title)}</div>
+        `;
+        card.onclick = () => {
+            if (i !== activeIdx) {
+                goTo(i);
+            } else {
+                // 3D tilt then navigate — same as AZORA
+                card.style.transition = 'transform 0.16s ease';
+                card.style.transform = 'scale(1.0) perspective(700px) rotateY(14deg)';
+                setTimeout(() => navigate('detail', { id: m.id }), 170);
+            }
+        };
+        track.appendChild(card);
+        return card;
+    });
+
+    carousel.appendChild(track);
+    container.appendChild(carousel);
+
+    function goTo(idx) {
+        if (idx < 0 || idx >= items.length) return;
+        activeIdx = idx;
+        cards.forEach((c, i) => {
+            c.classList.toggle('cfv-active', i === idx);
+            // reset any tilt from previous click
+            if (i === idx) c.style.transform = '';
+        });
+        const containerW = carousel.offsetWidth || window.innerWidth;
+        const offset = Math.round(containerW / 2 - ITEM_W * idx - ITEM_W / 2);
+        track.style.transform = `translateX(${offset}px)`;
+    }
+
+    // Touch / swipe
+    let touchStartX = 0;
+    carousel.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
+    carousel.addEventListener('touchend', e => {
+        const diff = touchStartX - e.changedTouches[0].clientX;
+        if (Math.abs(diff) > 44) goTo(diff > 0 ? activeIdx + 1 : activeIdx - 1);
+    }, { passive: true });
+
+    requestAnimationFrame(() => goTo(0));
 }
 
 function buildCard(m, progress) {
