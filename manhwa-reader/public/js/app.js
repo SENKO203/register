@@ -1278,9 +1278,10 @@ async function renderAdmin() {
 
     document.getElementById('btn-save-admin-settings').onclick = async () => {
         const body = {
-            groqKey:        document.getElementById('admin-groqkey').value.trim(),
-            groqModel:      document.getElementById('admin-groqmodel').value.trim(),
-            sourceLanguage: document.getElementById('admin-source').value,
+            groqKey:         document.getElementById('admin-groqkey').value.trim(),
+            groqModel:       document.getElementById('admin-groqmodel').value.trim(),
+            sourceLanguage:  document.getElementById('admin-source').value,
+            googleVisionKey: document.getElementById('admin-google-vision-key').value.trim(),
         };
         const readerPw = document.getElementById('admin-reader-pw').value.trim();
         if (readerPw) body.readerPassword = readerPw;

@@ -230,7 +230,7 @@ app.get('/api/profile', (req, res) => {
 app.post('/api/settings', requireAdmin, (req, res) => {
     const configPath = path.join(__dirname, 'config.json');
     const current = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf-8')) : {};
-    const allowed = ['groqKey', 'groqModel', 'sourceLanguage', 'targetLanguage'];
+    const allowed = ['groqKey', 'groqModel', 'sourceLanguage', 'targetLanguage', 'googleVisionKey'];
     const updates = {};
     for (const key of allowed) {
         if (req.body[key] !== undefined) updates[key] = String(req.body[key]).trim();
