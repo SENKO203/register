@@ -755,12 +755,85 @@ async function renderDetail(id) {
 }
 
 // ============================================================
-//   رسم صفحة على Canvas — يمحو النص الأصلي ويكتب العربية داخل الفقاعة
+//   Canvas Scanlation Engine
+//   كما تعمل فرق الترجمة: يكشف لون الخلفية → يمحو النص الأصلي → يكتب العربية
 // ============================================================
+
+// يسامل متوسط السطوع لمنطقة (من الحواف لتجنب النص نفسه)
+function _sampleBrightness(ctx, x, y, w, h) {
+    const cw = ctx.canvas.width, ch = ctx.canvas.height;
+    const pts = [
+        [x + w * .12, y + h * .12], [x + w * .88, y + h * .12],
+        [x + w * .12, y + h * .88], [x + w * .88, y + h * .88],
+        [x + w * .5,  y + h * .08], [x + w * .5,  y + h * .92],
+        [x + w * .08, y + h * .5],  [x + w * .92, y + h * .5],
+    ];
+    let total = 0, n = 0;
+    for (let [sx, sy] of pts) {
+        sx = Math.max(0, Math.min(cw - 1, Math.round(sx)));
+        sy = Math.max(0, Math.min(ch - 1, Math.round(sy)));
+        const d = ctx.getImageData(sx, sy, 1, 1).data;
+        total += (d[0] + d[1] + d[2]) / 3;
+        n++;
+    }
+    return n ? total / n : 128;
+}
+
+// يسامل لون الخلفية من خارج الـ bbox مباشرة (للنصوص على خلفية داكنة)
+function _sampleSurroundColor(ctx, x, y, w, h) {
+    const cw = ctx.canvas.width, ch = ctx.canvas.height;
+    const pad = 8;
+    const pts = [
+        [x - pad, y + h / 2], [x + w + pad, y + h / 2],
+        [x + w / 2, y - pad], [x + w / 2, y + h + pad],
+        [x - pad, y + h / 4], [x + w + pad, y + h * 3 / 4],
+    ].filter(([sx, sy]) => sx >= 0 && sx < cw && sy >= 0 && sy < ch);
+
+    let r = 0, g = 0, b = 0, n = 0;
+    for (const [sx, sy] of pts) {
+        const d = ctx.getImageData(Math.round(sx), Math.round(sy), 1, 1).data;
+        r += d[0]; g += d[1]; b += d[2]; n++;
+    }
+    if (!n) return 'rgb(8,8,8)';
+    return `rgb(${Math.round(r / n)},${Math.round(g / n)},${Math.round(b / n)})`;
+}
+
+// Flood fill من نقطة مركزية — يملأ كل البيكسلات الفاتحة حتى يصطدم بالحدود الداكنة
+// هذا هو جوهر عمل فرق الترجمة: يملأ الفقاعة البيضاء كاملة تلقائياً
+function _floodFillWhite(imageData, startX, startY) {
+    const W = imageData.width, H = imageData.height;
+    const data = imageData.data;
+    const sx = Math.max(0, Math.min(W - 1, Math.round(startX)));
+    const sy = Math.max(0, Math.min(H - 1, Math.round(startY)));
+
+    const si = (sy * W + sx) * 4;
+    if ((data[si] + data[si + 1] + data[si + 2]) / 3 < 145) return; // ليست منطقة فاتحة
+
+    const filled = new Uint8Array(W * H);
+    const queue  = [sy * W + sx];
+    filled[sy * W + sx] = 1;
+    let qi = 0;
+    const MAX = 150000; // حد أقصى لعدد البيكسلات (فقاعة عادية ≤ 50,000)
+
+    while (qi < queue.length && qi < MAX) {
+        const pos = queue[qi++];
+        const px = pos % W, py = (pos / W) | 0;
+        const i  = pos * 4;
+        // ابيّض هذا البيكسل
+        data[i] = 255; data[i + 1] = 255; data[i + 2] = 255; data[i + 3] = 255;
+
+        // تحقق من الجيران الأربعة
+        if (px > 0)     { const n = pos - 1; if (!filled[n]) { const ni = n*4; if ((data[ni]+data[ni+1]+data[ni+2])/3 >= 145) { filled[n]=1; queue.push(n); }}}
+        if (px < W - 1) { const n = pos + 1; if (!filled[n]) { const ni = n*4; if ((data[ni]+data[ni+1]+data[ni+2])/3 >= 145) { filled[n]=1; queue.push(n); }}}
+        if (py > 0)     { const n = pos - W; if (!filled[n]) { const ni = n*4; if ((data[ni]+data[ni+1]+data[ni+2])/3 >= 145) { filled[n]=1; queue.push(n); }}}
+        if (py < H - 1) { const n = pos + W; if (!filled[n]) { const ni = n*4; if ((data[ni]+data[ni+1]+data[ni+2])/3 >= 145) { filled[n]=1; queue.push(n); }}}
+    }
+}
+
 function buildPageCanvas(page) {
     return new Promise((resolve, reject) => {
         const canvas = document.createElement('canvas');
-        const ctx    = canvas.getContext('2d');
+        const ctx    = canvas.getContext('2d', { willReadFrequently: true });
         const img    = new Image();
 
         img.onload = () => {
@@ -768,42 +841,54 @@ function buildPageCanvas(page) {
             canvas.height = img.naturalHeight;
             ctx.drawImage(img, 0, 0);
 
-            for (const block of page.textBlocks || []) {
-                const { bbox, translated, type: t = 'speech' } = block;
-                if (!translated || !bbox) continue;
-                const x = bbox.x0, y = bbox.y0;
-                const w = bbox.x1 - bbox.x0;
-                const h = bbox.y1 - bbox.y0;
-                if (w < 8 || h < 8) continue;
+            const blocks = (page.textBlocks || []).filter(b => {
+                if (!b.translated?.trim() || !b.bbox) return false;
+                return (b.bbox.x1 - b.bbox.x0) >= 8 && (b.bbox.y1 - b.bbox.y0) >= 8;
+            }).map(b => {
+                const x = b.bbox.x0, y = b.bbox.y0;
+                const w = b.bbox.x1 - b.bbox.x0, h = b.bbox.y1 - b.bbox.y0;
+                const t = ['speech','thought','narration','sfx'].includes(b.type) ? b.type : 'speech';
+                const brightness = (t === 'sfx') ? 0 : _sampleBrightness(ctx, x, y, w, h);
+                return { x, y, w, h, t, brightness, translated: b.translated };
+            });
 
+            if (!blocks.length) { resolve(canvas); return; }
+
+            // ── جولة 1: flood fill كل الفقاعات الفاتحة دفعة واحدة على image data مباشرة ──
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            for (const { x, y, w, h, t, brightness } of blocks) {
+                if (t !== 'sfx' && brightness > 145) {
+                    _floodFillWhite(imgData, Math.round(x + w / 2), Math.round(y + h / 2));
+                }
+            }
+            ctx.putImageData(imgData, 0, 0);
+
+            // ── جولة 2: عالج الخلفيات الداكنة + ارسم كل النصوص ──
+            for (const { x, y, w, h, t, brightness, translated } of blocks) {
                 ctx.save();
 
                 if (t === 'sfx') {
-                    // مؤثر صوتي: بادج صغير بالزاوية
+                    // مؤثر صوتي: بادج صغير داكن
                     ctx.font = 'bold 13px Cairo, sans-serif';
-                    const tw = ctx.measureText(translated).width + 10;
-                    ctx.fillStyle = 'rgba(0,0,0,.75)';
-                    ctx.fillRect(x, y, tw, 20);
-                    ctx.fillStyle = '#fff';
-                    ctx.textAlign = 'right';
-                    ctx.textBaseline = 'middle';
-                    ctx.direction = 'rtl';
-                    ctx.fillText(translated, x + tw - 5, y + 10);
-                } else if (t === 'narration') {
-                    // صندوق سرد مستطيل
-                    ctx.fillStyle = 'rgb(245,242,230)';
-                    ctx.fillRect(x, y, w, h);
-                    ctx.strokeStyle = 'rgba(0,0,0,.25)';
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(x + .5, y + .5, w - 1, h - 1);
-                    paintTextInBubble(ctx, translated, x, y, w, h, '#1a1a1a', 0.88);
+                    const tw = ctx.measureText(translated).width + 14;
+                    ctx.fillStyle = 'rgba(0,0,0,.82)';
+                    ctx.fillRect(x, y, tw, 22);
+                    ctx.fillStyle = '#ffd54f';
+                    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.direction = 'rtl';
+                    ctx.fillText(translated, x + tw - 7, y + 11);
+
+                } else if (brightness <= 145) {
+                    // نص على خلفية داكنة — يسامل لون الخلفية من حوله ويطمس النص الأصلي
+                    const bg  = _sampleSurroundColor(ctx, x, y, w, h);
+                    const pad = Math.max(4, Math.round(Math.min(w, h) * 0.12));
+                    ctx.fillStyle = bg;
+                    ctx.fillRect(x - pad, y - pad, w + 2 * pad, h + 2 * pad);
+                    // نص أبيض فوق الخلفية الداكنة
+                    paintTextInBubble(ctx, translated, x - pad, y - pad, w + 2*pad, h + 2*pad, '#ffffff', 0.92);
+
                 } else {
-                    // speech / thought: شكل إهليلجي أبيض
-                    ctx.fillStyle = 'white';
-                    ctx.beginPath();
-                    ctx.ellipse(x + w / 2, y + h / 2, w / 2 * 1.03, h / 2 * 1.03, 0, 0, Math.PI * 2);
-                    ctx.fill();
-                    paintTextInBubble(ctx, translated, x, y, w, h, '#111', 0.76);
+                    // فقاعة فاتحة — flood fill أُنجز في جولة 1، ارسم النص الداكن فقط
+                    paintTextInBubble(ctx, translated, x, y, w, h, '#111111', 0.80);
                 }
 
                 ctx.restore();
@@ -823,19 +908,16 @@ function paintTextInBubble(ctx, text, bx, by, bw, bh, color, padFactor) {
     const cx   = bx + bw / 2;
     const cy   = by + bh / 2;
 
-    // ابحث عن أكبر حجم خط يتسع داخل الفقاعة
     const hi = Math.min(Math.floor(bw / 3.5), Math.floor(bh / 1.5), 36);
     let bestSize = 10, bestLines = [text];
 
     for (let size = Math.max(hi, 10); size >= 10; size--) {
         ctx.font = `700 ${size}px Cairo, sans-serif`;
         const lines = wrapTextCanvas(ctx, text, maxW);
-        if (lines.length * size * 1.35 <= maxH) {
-            bestSize = size; bestLines = lines; break;
-        }
+        if (lines.length * size * 1.35 <= maxH) { bestSize = size; bestLines = lines; break; }
     }
 
-    ctx.font         = `700 ${bestSize}px Cairo, sans-serif`;
+    ctx.font = `700 ${bestSize}px Cairo, sans-serif`;
     ctx.fillStyle    = color;
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
@@ -853,9 +935,8 @@ function wrapTextCanvas(ctx, text, maxW) {
     let cur = '';
     for (const w of words) {
         const test = cur ? cur + ' ' + w : w;
-        if (ctx.measureText(test).width > maxW && cur) {
-            lines.push(cur); cur = w;
-        } else cur = test;
+        if (ctx.measureText(test).width > maxW && cur) { lines.push(cur); cur = w; }
+        else cur = test;
     }
     if (cur) lines.push(cur);
     return lines.length ? lines : [text];
