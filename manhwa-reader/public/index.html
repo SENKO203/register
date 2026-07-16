@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>MEDOSA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- ============ هيدر علوي ثابت ============ -->
+<header class="app-header">
+    <div class="header-logo">MED<span class="logo-accent">O</span>SA</div>
+    <div class="header-icons">
+        <button class="hbtn" id="btn-header-profile" aria-label="حسابي">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+        </button>
+        <button class="hbtn" id="btn-open-drawer" aria-label="القائمة">
+            <svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+    </div>
+</header>
+
+<!-- ============ درج التنقل الجانبي ============ -->
+<div class="drawer-overlay" id="drawer-overlay"></div>
+<nav class="drawer" id="drawer" aria-label="قائمة التنقل">
+    <div class="drawer-head">
+        <button class="drawer-close" id="btn-close-drawer" aria-label="إغلاق">✕</button>
+        <div class="drawer-logo">MED<span class="logo-accent">O</span>SA</div>
+    </div>
+    <ul class="drawer-nav">
+        <li>
+            <button class="drawer-item active" data-view="home">
+                الرئيسية
+                <svg viewBox="0 0 24 24"><path d="M4 11L12 4l8 7v9a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9z"/></svg>
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+        <li>
+            <button class="drawer-item" data-view="library-list">
+                قائمة المانجا
+                <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+        <li><div class="drawer-divider"></div><div class="drawer-section-label">مكتبتي</div></li>
+        <li>
+            <button class="drawer-item" data-view="my-library" data-list="favorites">
+                ♥ مفضلة
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+        <li>
+            <button class="drawer-item" data-view="my-library" data-list="currentlyReading">
+                📖 أقرأها الآن
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+        <li>
+            <button class="drawer-item" data-view="my-library" data-list="readLater">
+                🔖 قراءة لاحقاً
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+        <li>
+            <button class="drawer-item" data-view="my-library" data-list="completed">
+                ✓ مقروءة
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+        <li><div class="drawer-divider"></div></li>
+        <li>
+            <button class="drawer-item" data-view="profile">
+                حساب
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg>
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+        <li id="drawer-admin-item" hidden>
+            <button class="drawer-item" data-view="admin">
+                إدارة
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span class="drawer-dot"></span>
+            </button>
+        </li>
+    </ul>
+</nav>
+
+<!-- ============ حاوية المحتوى ============ -->
+<main id="app"></main>
+
+<!-- ============ قوالب ============ -->
+
+<template id="tpl-home">
+    <!-- Hero -->
+    <div id="home-hero-wrap"></div>
+
+    <!-- تابع القراءة -->
+    <section id="continue-row" hidden>
+        <div class="home-sec-head">
+            <h2 class="home-sec-title">متابعة القراءة</h2>
+        </div>
+        <div class="hscroll" id="continue-scroll"></div>
+    </section>
+
+    <!-- شائع اليوم -->
+    <section id="home-popular-sec" hidden>
+        <div class="home-sec-head">
+            <h2 class="home-sec-title">🔥 شائع اليوم</h2>
+        </div>
+        <div id="home-popular-carousel"></div>
+        <div class="home-popular-grid" id="home-popular-grid"></div>
+    </section>
+
+    <!-- أحدث الإصدارات -->
+    <section id="home-updates-sec" hidden>
+        <div class="home-sec-head">
+            <h2 class="home-sec-title">أحدث الإصدارات</h2>
+            <button class="home-sec-more" id="btn-home-view-all">عرض الكل</button>
+        </div>
+        <div id="home-updates-list"></div>
+    </section>
+
+    <p class="home-empty-hint" id="home-empty" hidden>لا يوجد أي عمل — أضف أول عمل من لوحة الإدارة.</p>
+    <div style="height:30px"></div>
+</template>
+
+<template id="tpl-library-list">
+    <div class="lib-list-head">
+        <h1 class="lib-list-title">الأعمال 📚</h1>
+        <p class="lib-list-sub" id="lib-list-count"></p>
+    </div>
+    <div class="lib-search-wrap">
+        <div class="lib-search-bar">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input type="text" id="lib-search-input" placeholder="البحث عن عمل...">
+        </div>
+    </div>
+    <div class="lib-list-grid" id="lib-list-grid"></div>
+    <p class="empty-hint" id="lib-list-empty" hidden>لا توجد أعمال في المكتبة بعد.</p>
+</template>
+
+<template id="tpl-my-library">
+    <div class="my-lib-tabs-wrap">
+        <div class="my-lib-tabs" id="my-lib-tabs">
+            <button class="my-lib-tab" data-list="favorites">♥ مفضلة</button>
+            <button class="my-lib-tab" data-list="currentlyReading">📖 جاري</button>
+            <button class="my-lib-tab" data-list="readLater">🔖 لاحقاً</button>
+            <button class="my-lib-tab" data-list="completed">✓ مقروءة</button>
+        </div>
+    </div>
+    <div class="lib-list-grid" id="my-lib-grid"></div>
+    <p class="empty-hint" id="my-lib-empty" hidden>لا توجد أعمال في هذه القائمة.</p>
+</template>
+
+<!-- صفحة التفاصيل — AZORA style -->
+<template id="tpl-detail">
+    <!-- زر الرجوع -->
+    <button class="icon-btn detail-back-btn" id="btn-back">
+        <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+    </button>
+
+    <!-- غلاف كامل الشاشة -->
+    <div class="detail-hero">
+        <img class="detail-hero-img" id="detail-cover" alt="">
+        <div class="detail-hero-overlay"></div>
+        <div class="detail-hero-bottom">
+            <h1 class="detail-hero-title" id="detail-title"></h1>
+        </div>
+    </div>
+
+    <!-- أزرار الفعل تحت الغلاف -->
+    <div class="detail-action-row">
+        <button class="btn btn-blue detail-wide-btn" id="btn-add-list">
+            <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+            أضف للمكتبة
+        </button>
+        <button class="btn btn-primary detail-wide-btn" id="btn-continue-read">
+            <svg viewBox="0 0 24 24"><path d="M6 4l12 8-12 8V4z"/></svg>
+            اقرأ الآن
+        </button>
+    </div>
+
+    <!-- شبكة الميتا -->
+    <div class="detail-meta-grid">
+        <div class="detail-meta-item">
+            <span class="detail-meta-label">الحالة</span>
+            <span class="detail-meta-val">مستمر</span>
+        </div>
+        <div class="detail-meta-item">
+            <span class="detail-meta-label">النوع</span>
+            <span class="detail-meta-val" id="detail-type">مانهوا</span>
+        </div>
+        <div class="detail-meta-item">
+            <span class="detail-meta-label">الفصول</span>
+            <span class="detail-meta-val" id="detail-ch-count">—</span>
+        </div>
+    </div>
+
+    <!-- الوسوم -->
+    <div class="tag-row" id="detail-tags" style="padding:0 18px 14px;"></div>
+
+    <!-- تبويبات -->
+    <div class="detail-tabs-bar">
+        <button class="detail-tab active" data-tab="chapters">الفصول</button>
+        <button class="detail-tab" data-tab="summary">الملخص</button>
+    </div>
+
+    <!-- محتوى: الفصول -->
+    <div id="detail-tab-chapters">
+        <div id="mdx-chapter-section" hidden>
+            <h2 class="section-title">فصول MangaDex</h2>
+            <div class="chapter-list" id="mdx-chapter-list" style="padding:0 18px"></div>
+        </div>
+        <div class="chapter-list" id="chapter-list" style="padding:0 18px;gap:0;background:rgba(255,255,255,.03);border-radius:10px;overflow:hidden;margin:0 18px 24px"></div>
+    </div>
+
+    <!-- محتوى: الملخص -->
+    <div id="detail-tab-summary" hidden>
+        <div class="detail-desc-wrap">
+            <p class="detail-desc" id="detail-desc"></p>
+        </div>
+    </div>
+</template>
+
+<template id="tpl-reader">
+    <div class="reader-top">
+        <button class="icon-btn" id="reader-back">
+            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span class="reader-title" id="reader-title"></span>
+        <button class="icon-btn" id="reader-toggle-original" title="عرض النص الأصلي">
+            <svg viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/><path d="M8 21V3"/></svg>
+        </button>
+    </div>
+    <div class="reader-scroll" id="reader-scroll"></div>
+    <div class="reader-end" id="reader-end" hidden>
+        <p>انتهى الفصل</p>
+        <button class="btn btn-primary" id="btn-next-chapter">الفصل التالي ⟵</button>
+    </div>
+</template>
+
+<template id="tpl-profile">
+    <header class="page-head profile-head">
+        <div class="avatar" id="profile-avatar">📖</div>
+        <h1 class="brand" id="profile-name">قارئي الشخصي</h1>
+        <p class="profile-username" id="profile-username" style="display:none"></p>
+    </header>
+    <div class="stat-grid">
+        <div class="stat-card"><span class="stat-num" id="stat-chapters">0</span><span class="stat-label">فصل مقروء</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-manhwa">0</span><span class="stat-label">في المكتبة</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-fav">0</span><span class="stat-label">مفضلة ♥</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-reading">0</span><span class="stat-label">أقرأها الآن 📖</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-later">0</span><span class="stat-label">قراءة لاحقاً 🔖</span></div>
+        <div class="stat-card"><span class="stat-num" id="stat-completed">0</span><span class="stat-label">مقروءة ✓</span></div>
+    </div>
+    <!-- أزرار التعديل — تظهر للمستخدمين المسجلين -->
+    <div class="profile-edit-section" id="profile-edit-section" style="display:none">
+        <h2 class="section-title">تعديل الحساب</h2>
+        <div class="form" style="padding:0 18px 24px">
+            <label>الاسم المعروض<input type="text" id="edit-display-name" placeholder="اسمك"></label>
+            <div class="emoji-picker-row">
+                <span style="font-size:13px;color:var(--text-muted)">أيقونة الحساب</span>
+                <div class="emoji-options" id="emoji-options">
+                    📖 📚 🗡️ ⚔️ 🔥 ❄️ 🌙 ⭐ 👑 🐉
+                </div>
+            </div>
+            <button class="btn btn-blue" id="btn-save-profile">حفظ التغييرات</button>
+        </div>
+    </div>
+    <div class="profile-actions">
+        <button class="btn btn-primary" id="btn-logout">تسجيل الخروج</button>
+        <button class="btn btn-admin-toggle" id="btn-admin-login" style="display:none">🔐 دخول كمدير</button>
+        <button class="btn btn-outline" id="btn-register-link" style="display:none">إنشاء حساب</button>
+        <button class="btn btn-outline" id="btn-user-login-link" style="display:none">تسجيل دخول بحساب</button>
+    </div>
+</template>
+
+<template id="tpl-admin">
+    <header class="page-head">
+        <h1 class="brand">⚙ الإدارة</h1>
+    </header>
+
+    <h2 class="section-title">بحث وإضافة من MangaDex</h2>
+    <div class="mdx-search-wrap">
+        <div class="mdx-search-row">
+            <input type="text" id="mdx-search-input" placeholder="Solo Leveling, Tower of God, ...">
+            <button class="btn btn-primary" id="btn-mdx-search" style="width:auto;white-space:nowrap">بحث ✦</button>
+        </div>
+        <div id="mdx-results"></div>
+    </div>
+
+    <h2 class="section-title">المكتبة</h2>
+    <div class="admin-lib-list" id="admin-lib-list"></div>
+
+    <h2 class="section-title">إضافة عمل يدوياً</h2>
+    <form class="form" id="form-admin-add-manhwa">
+        <label>العنوان<input type="text" name="title" required></label>
+        <label>الوصف<textarea name="description" rows="3"></textarea></label>
+        <label>الوسوم (افصل بفاصلة)<input type="text" name="tags" placeholder="أكشن, فانتازيا"></label>
+        <label>رابط صورة الغلاف<input type="text" name="coverUrl" placeholder="اختياري"></label>
+        <button class="btn btn-primary" type="submit">إضافة للمكتبة</button>
+    </form>
+
+    <h2 class="section-title">الإعدادات</h2>
+    <div class="settings-list">
+        <label class="settings-row">
+            <span>مفتاح Groq</span>
+            <input type="password" id="admin-groqkey" placeholder="gsk_...">
+        </label>
+        <label class="settings-row">
+            <span>مفتاح Google Vision <small style="opacity:.6;font-size:11px">(OCR دقيق — اختياري)</small></span>
+            <input type="password" id="admin-google-vision-key" placeholder="AIza...">
+        </label>
+        <label class="settings-row">
+            <span>موديل Groq</span>
+            <input type="text" id="admin-groqmodel" placeholder="llama-3.3-70b-versatile">
+        </label>
+        <label class="settings-row">
+            <span>لغة المصدر</span>
+            <select id="admin-source">
+                <option value="kor">كورية</option>
+                <option value="jpn">يابانية</option>
+                <option value="chi_sim">صينية مبسطة</option>
+                <option value="chi_tra">صينية تقليدية</option>
+                <option value="eng">إنجليزية</option>
+            </select>
+        </label>
+        <label class="settings-row">
+            <span>كلمة سر القراء</span>
+            <input type="password" id="admin-reader-pw" placeholder="اتركه فاضي = بدون تغيير">
+        </label>
+        <label class="settings-row">
+            <span>كلمة سر المدير</span>
+            <input type="password" id="admin-admin-pw" placeholder="اتركه فاضي = بدون تغيير">
+        </label>
+        <button class="btn btn-primary" id="btn-save-admin-settings">حفظ الإعدادات</button>
+    </div>
+
+    <h2 class="section-title">قاموس المصطلحات</h2>
+    <div class="settings-list">
+        <div id="glossary-list"></div>
+        <form id="form-add-glossary">
+            <div class="glossary-inputs">
+                <input type="text" id="glossary-korean" placeholder="한국어 (كوري)" autocomplete="off">
+                <input type="text" id="glossary-arabic" placeholder="الترجمة العربية" autocomplete="off">
+            </div>
+            <button class="btn btn-primary" type="submit" style="margin-top:10px">إضافة مصطلح</button>
+        </form>
+    </div>
+</template>
+
+<!-- نموذج تعديل المانهوا (للمدير) -->
+<template id="tpl-admin-edit">
+    <header class="page-head">
+        <button class="icon-btn" id="edit-back-btn">
+            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <h1 class="brand" style="font-size:18px">تعديل العمل</h1>
+    </header>
+
+    <div class="form" style="padding:0 18px 20px">
+        <div style="text-align:center;margin-bottom:16px">
+            <img id="edit-cover-preview" style="width:100px;height:140px;object-fit:cover;border-radius:10px;border:2px solid var(--red)" alt="">
+        </div>
+        <label>العنوان<input type="text" id="edit-title"></label>
+        <label>الوصف<textarea id="edit-description" rows="4"></textarea></label>
+        <label>الوسوم (افصل بفاصلة)<input type="text" id="edit-tags"></label>
+        <label>رابط صورة الغلاف<input type="text" id="edit-cover-url"></label>
+        <button class="btn btn-primary" id="btn-save-edit">حفظ التغييرات</button>
+    </div>
+
+    <h2 class="section-title">إضافة فصل جديد</h2>
+    <form class="form" id="form-upload-chapter">
+        <label>رقم الفصل<input type="number" name="chapterNum" required min="1"></label>
+        <label>صور الفصل (بترتيب الصفحات)<input type="file" name="pages" accept="image/*" multiple required></label>
+        <button class="btn btn-primary" type="submit" id="btn-upload-chapter">معالجة وإضافة</button>
+        <p class="form-hint" id="upload-status"></p>
+    </form>
+
+    <h2 class="section-title">فصول MangaDex</h2>
+    <div id="edit-mdx-section">
+        <p class="empty-hint" id="edit-mdx-hint">لا يوجد رابط MangaDex لهذا العمل.</p>
+        <div class="chapter-list" id="edit-mdx-chapter-list" style="display:none"></div>
+    </div>
+</template>
+
+<script src="/js/app.js"></script>
+</body>
+</html>
