@@ -237,7 +237,61 @@ No text → {"blocks":[]}`;
 }
 
 // ============================================================
-//   معالجة الفصل — يختار Pipeline تلقائياً حسب المفاتيح المتوفرة
+//   خطوة 3: Tesseract.js — OCR محلي مجاني بإحداثيات بيكسل دقيقة
+// ============================================================
+async function callTesseract(imagePath, language) {
+    const Tesseract = require('tesseract.js');
+    const langMap   = { kor: 'kor', chi_sim: 'chi_sim', chi_tra: 'chi_tra', jpn: 'jpn', eng: 'eng' };
+    const lang      = langMap[language] || 'kor';
+
+    const { data } = await Tesseract.recognize(imagePath, lang, { logger: () => {} });
+
+    const blocks = [];
+    const seen   = new Set();
+
+    for (const para of data.paragraphs || []) {
+        const text = (para.text || '').replace(/[\n\r]+/g, ' ').trim();
+        if (!text || text.length < 2) continue;
+        if ((para.confidence || 0) < 45) continue;
+
+        const { x0, y0, x1, y1 } = para.bbox;
+        if ((x1 - x0) < 15 || (y1 - y0) < 15) continue;
+
+        const key = `${x0}-${y0}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        blocks.push({ original: text, bbox: { x0, y0, x1, y1 }, confidence: para.confidence });
+    }
+
+    return blocks;
+}
+
+// ============================================================
+//   دالة مشتركة: ترجمة + بناء textBlocks من rawBlocks
+// ============================================================
+async function translateAndBuild(rawBlocks, glossary, config, pageNum) {
+    if (!rawBlocks.length) return [];
+    let translations = [];
+    try {
+        translations = await translateBatch(rawBlocks.map(b => b.original), glossary, config);
+    } catch (e) {
+        console.error(`[ص${pageNum}] خطأ في الترجمة:`, e.message);
+    }
+    return rawBlocks.map((block, idx) => ({
+        bbox:       block.bbox,
+        type:       'speech',
+        original:   block.original,
+        translated: (translations[idx] || '').trim(),
+    })).filter(b => b.translated);
+}
+
+// ============================================================
+//   معالجة الفصل — Pipeline ثلاثي الطبقات تلقائي
+//
+//   طبقة 1 (الأفضل)  : Google Vision  + Groq Text  ← إذا googleVisionKey موجود
+//   طبقة 2 (مجاني)   : Tesseract.js   + Groq Text  ← الافتراضي
+//   طبقة 3 (احتياطي) : Groq Vision    (كل شيء)     ← إذا فشل Tesseract
 // ============================================================
 async function processChapterImages(manhwaId, chapterNum, imagePaths, onProgress) {
     const config   = getConfig();
@@ -246,7 +300,9 @@ async function processChapterImages(manhwaId, chapterNum, imagePaths, onProgress
     if (!config.groqKey) throw new Error('مفتاح Groq غير موجود — أضفه من لوحة الإدارة');
 
     const useGoogleVision = !!config.googleVisionKey;
-    console.log(`[Pipeline] ${useGoogleVision ? 'Google Vision + Groq Text ✓' : 'Groq Vision (fallback)'}`);
+    const srcLang         = config.sourceLanguage || 'kor';
+
+    console.log(`[Pipeline] ${useGoogleVision ? '① Google Vision + Groq Text' : '② Tesseract + Groq Text (+ ③ Groq Vision احتياطي)'}`);
 
     const chapterDir = path.join(db.DATA_DIR, 'library', manhwaId, `chapter-${chapterNum}`);
     fs.mkdirSync(chapterDir, { recursive: true });
@@ -262,58 +318,63 @@ async function processChapterImages(manhwaId, chapterNum, imagePaths, onProgress
 
         let textBlocks = [];
 
+        // ══════════ طبقة 1: Google Vision ══════════
         if (useGoogleVision) {
-            // ── Pipeline الاحترافي: Google Vision + Groq Text ──
             try {
                 const rawBlocks = await callGoogleVision(imgPath, config);
-
                 if (rawBlocks.length) {
                     if (onProgress) onProgress({ page: pageNum, total: imagePaths.length, stage: 'translate' });
-
-                    let translations = [];
-                    try {
-                        translations = await translateBatch(rawBlocks.map(b => b.original), glossary, config);
-                    } catch (e) {
-                        console.error(`[ص${pageNum}] خطأ في الترجمة:`, e.message);
-                    }
-
-                    textBlocks = rawBlocks.map((block, idx) => ({
-                        bbox:       block.bbox,
-                        type:       'speech', // Canvas يكتشف نوع الخلفية تلقائياً بالـ brightness
-                        original:   block.original,
-                        translated: (translations[idx] || '').trim(),
-                    })).filter(b => b.translated);
+                    textBlocks = await translateAndBuild(rawBlocks, glossary, config, pageNum);
                 }
             } catch (e) {
-                console.error(`[ص${pageNum}] خطأ في Google Vision:`, e.message);
+                console.error(`[ص${pageNum}] Google Vision خطأ:`, e.message);
             }
+
+        // ══════════ طبقة 2: Tesseract + Groq Text ══════════
         } else {
-            // ── Fallback: Groq Vision (النظام القديم) ──
+            let usedTesseract = false;
             try {
-                if (onProgress) onProgress({ page: pageNum, total: imagePaths.length, stage: 'vision' });
-                const result = await callGroqVisionFallback(imgPath, glossary, config);
-                textBlocks = (result.blocks || [])
-                    .filter(b => {
-                        if (!b.original?.trim()) return false;
-                        const t = b.type || 'speech';
-                        if (t === 'narration' && (b.h || 0) > 30) return false;
-                        if (t === 'sfx' && ((b.w || 0) > 50 || (b.h || 0) > 40)) return false;
-                        if ((t === 'speech' || t === 'thought') && ((b.w || 0) > 68 || (b.h || 0) > 55)) return false;
-                        return true;
-                    })
-                    .map(b => ({
-                        bbox: {
-                            x0: Math.round(Math.max(0, b.x / 100) * width),
-                            y0: Math.round(Math.max(0, b.y / 100) * height),
-                            x1: Math.round(Math.min(100, (b.x + b.w) / 100) * width),
-                            y1: Math.round(Math.min(100, (b.y + b.h) / 100) * height),
-                        },
-                        type:       ['speech','thought','narration','sfx'].includes(b.type) ? b.type : 'speech',
-                        original:   b.original.trim(),
-                        translated: (b.translated || '').trim(),
-                    }));
+                const rawBlocks = await callTesseract(imgPath, srcLang);
+                console.log(`[ص${pageNum}] Tesseract → ${rawBlocks.length} كتلة (متوسط confidence: ${rawBlocks.length ? Math.round(rawBlocks.reduce((s, b) => s + b.confidence, 0) / rawBlocks.length) : 0}%)`);
+
+                if (rawBlocks.length > 0) {
+                    usedTesseract = true;
+                    if (onProgress) onProgress({ page: pageNum, total: imagePaths.length, stage: 'translate' });
+                    textBlocks = await translateAndBuild(rawBlocks, glossary, config, pageNum);
+                }
             } catch (e) {
-                console.error(`[ص${pageNum}] خطأ في Groq Vision:`, e.message);
+                console.error(`[ص${pageNum}] Tesseract خطأ:`, e.message);
+            }
+
+            // ══════════ طبقة 3: Groq Vision احتياطي ══════════
+            if (!usedTesseract || textBlocks.length === 0) {
+                console.log(`[ص${pageNum}] → Groq Vision احتياطي`);
+                try {
+                    if (onProgress) onProgress({ page: pageNum, total: imagePaths.length, stage: 'vision' });
+                    const result = await callGroqVisionFallback(imgPath, glossary, config);
+                    textBlocks = (result.blocks || [])
+                        .filter(b => {
+                            if (!b.original?.trim()) return false;
+                            const t = b.type || 'speech';
+                            if (t === 'narration' && (b.h || 0) > 30) return false;
+                            if (t === 'sfx'        && ((b.w || 0) > 50 || (b.h || 0) > 40)) return false;
+                            if ((t === 'speech' || t === 'thought') && ((b.w || 0) > 68 || (b.h || 0) > 55)) return false;
+                            return true;
+                        })
+                        .map(b => ({
+                            bbox: {
+                                x0: Math.round(Math.max(0,   b.x / 100)           * width),
+                                y0: Math.round(Math.max(0,   b.y / 100)           * height),
+                                x1: Math.round(Math.min(100, (b.x + b.w) / 100)  * width),
+                                y1: Math.round(Math.min(100, (b.y + b.h) / 100)  * height),
+                            },
+                            type:       ['speech','thought','narration','sfx'].includes(b.type) ? b.type : 'speech',
+                            original:   b.original.trim(),
+                            translated: (b.translated || '').trim(),
+                        }));
+                } catch (e) {
+                    console.error(`[ص${pageNum}] Groq Vision خطأ:`, e.message);
+                }
             }
         }
 
